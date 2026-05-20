@@ -1,0 +1,20 @@
+# Environment — contains DB credentials, never commit this
+.env
+
+# Database migration runners (contain local paths)
+database/run_*.php
+
+# Uploaded files
+public/uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
+# PHP error logs
+*.log

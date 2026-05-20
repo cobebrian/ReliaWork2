@@ -1,0 +1,324 @@
+/* ============================================================
+   ReliaWork2 — Main Stylesheet
+   ============================================================ */
+
+:root {
+    --sidebar-width: 250px;
+    --sidebar-bg: #1e2a3a;
+    --sidebar-text: #c8d6e5;
+    --sidebar-active: #3d8bcd;
+    --topbar-height: 60px;
+    --primary: #2d4a6e;
+    --accent: #3d8bcd;
+    --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    --border-radius: 10px;
+}
+
+/* ── Base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body.rw2-layout {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f0f4f8;
+    color: #2c3e50;
+    margin: 0;
+    padding: 0;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+.rw2-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    letter-spacing: -0.3px;
+}
+
+.sidebar-role-badge {
+    margin: 0.75rem 1rem;
+    padding: 0.35rem 0.75rem;
+    background: rgba(61, 139, 205, 0.2);
+    color: var(--accent);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+    border: 1px solid rgba(61, 139, 205, 0.3);
+}
+
+.sidebar-nav {
+    list-style: none;
+    padding: 0.5rem 0;
+    margin: 0;
+    flex: 1;
+}
+
+.sidebar-nav-item { margin: 2px 0.75rem; }
+
+.sidebar-nav-link {
+    display: flex;
+    align-items: center;
+    padding: 0.65rem 0.85rem;
+    color: var(--sidebar-text);
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-nav-link:hover {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+}
+
+.sidebar-nav-link.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+
+.sidebar-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ── Main Layout ──────────────────────────────────────────── */
+.rw2-main {
+    margin-left: var(--sidebar-width);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Topbar ───────────────────────────────────────────────── */
+.rw2-topbar {
+    height: var(--topbar-height);
+    background: #fff;
+    border-bottom: 1px solid #e8ecf0;
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.topbar-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #2c3e50;
+}
+
+.topbar-user {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    color: #666;
+}
+
+/* ── Content ──────────────────────────────────────────────── */
+.rw2-content {
+    flex: 1;
+    padding: 1.75rem;
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.rw2-footer {
+    padding: 1rem 1.75rem;
+    border-top: 1px solid #e8ecf0;
+    background: #fff;
+    color: #999;
+    text-align: center;
+}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card {
+    border-radius: var(--border-radius) !important;
+}
+
+.card-header {
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* ── Stat Cards ───────────────────────────────────────────── */
+.stat-card {
+    border-radius: var(--border-radius) !important;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+}
+
+.stat-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #1e2a3a;
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    color: #888;
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+/* ── Avatar ───────────────────────────────────────────────── */
+.avatar-circle {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+/* ── Tables ───────────────────────────────────────────────── */
+.table th {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+}
+
+.table td { font-size: 0.875rem; }
+
+/* ── Badges ───────────────────────────────────────────────── */
+.badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+    border-radius: 6px;
+}
+
+/* ── Vacancy Cards ────────────────────────────────────────── */
+.vacancy-card {
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.vacancy-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+}
+
+/* ── Flash Messages ───────────────────────────────────────── */
+.flash-message {
+    border-radius: var(--border-radius);
+    border: none;
+    box-shadow: var(--card-shadow);
+}
+
+/* ── Forms ────────────────────────────────────────────────── */
+.form-control, .form-select {
+    border-radius: 8px;
+    border-color: #dde3ea;
+    font-size: 0.875rem;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(61, 139, 205, 0.15);
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.btn-primary:hover {
+    background: #2d7ab8;
+    border-color: #2d7ab8;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 991.98px) {
+    .rw2-sidebar {
+        transform: translateX(-100%);
+    }
+
+    .rw2-sidebar.show {
+        transform: translateX(0);
+    }
+
+    .rw2-main {
+        margin-left: 0;
+    }
+}
+
+/* ── Print Styles ─────────────────────────────────────────── */
+@media print {
+    .rw2-sidebar,
+    .rw2-topbar,
+    .rw2-footer,
+    .no-print,
+    .btn,
+    .alert {
+        display: none !important;
+    }
+
+    .rw2-main {
+        margin-left: 0 !important;
+    }
+
+    .rw2-content {
+        padding: 0 !important;
+    }
+
+    body {
+        background: #fff !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+
+    .table {
+        font-size: 10pt;
+    }
+}
