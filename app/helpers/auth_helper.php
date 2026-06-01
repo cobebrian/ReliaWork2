@@ -139,12 +139,13 @@ function getFlash(string $key): string
 function roleDashboardUrl(string $role): string
 {
     $map = [
-        'admin'             => APP_URL . '/admin/dashboard',
-        'supervising_labor' => APP_URL . '/supervising-labor/dashboard',
-        'barangay_captain'  => APP_URL . '/barangay-captain/dashboard',
-        'secretary'         => APP_URL . '/secretary/dashboard',
-        'agency'            => APP_URL . '/agency/dashboard',
-        'applicant'         => APP_URL . '/applicant/dashboard',
+        'admin'               => APP_URL . '/admin/dashboard',
+        'supervising_labor'   => APP_URL . '/supervising-labor/dashboard',
+        'barangay_captain'    => APP_URL . '/barangay-captain/dashboard',
+        'secretary'           => APP_URL . '/secretary/dashboard',
+        'agency'              => APP_URL . '/agency/dashboard',
+        'applicant'           => APP_URL . '/applicant/dashboard',
+        'techvoc_supervisor'  => APP_URL . '/techvoc/dashboard',
     ];
     return $map[$role] ?? APP_URL . '/login';
 }

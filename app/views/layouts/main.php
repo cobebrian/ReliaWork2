@@ -59,6 +59,15 @@ switch ($role) {
             ['url' => APP_URL . '/applicant/my-applications',  'icon' => 'bi-file-earmark-text', 'label' => 'My Applications'],
         ];
         break;
+    case 'techvoc_supervisor':
+        $navLinks = [
+            ['url' => APP_URL . '/techvoc/dashboard',                'icon' => 'bi-speedometer2',    'label' => 'Dashboard'],
+            ['url' => APP_URL . '/techvoc/class/1',                  'icon' => 'bi-fire',            'label' => 'Welding Class'],
+            ['url' => APP_URL . '/techvoc/class/2',                  'icon' => 'bi-lightning-charge-fill', 'label' => 'Electrical Class'],
+            ['url' => APP_URL . '/techvoc/class/1/attendance',       'icon' => 'bi-clipboard-check', 'label' => 'Welding Attendance'],
+            ['url' => APP_URL . '/techvoc/class/2/attendance',       'icon' => 'bi-clipboard-check', 'label' => 'Electrical Attendance'],
+        ];
+        break;
 }
 
 $currentUrl = APP_URL . strtok($_SERVER['REQUEST_URI'] ?? '/', '?');

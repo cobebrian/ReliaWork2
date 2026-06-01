@@ -64,6 +64,7 @@ define('ROLES', [
     'secretary',
     'agency',
     'applicant',
+    'techvoc_supervisor',
 ]);
 
 // ── Role Labels ───────────────────────────────────────────────────────────────
@@ -74,4 +75,5 @@ define('ROLE_LABELS', [
     'secretary'          => 'Secretary',
     'agency'             => 'Agency',
     'applicant'          => 'Applicant',
+    'techvoc_supervisor' => 'TECH-VOC Supervisor',
 ]);

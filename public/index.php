@@ -25,6 +25,7 @@ require_once APP_PATH . '/models/ResourceModel.php';
 require_once APP_PATH . '/models/ApplicantModel.php';
 require_once APP_PATH . '/models/ApplicationModel.php';
 require_once APP_PATH . '/models/AnnouncementModel.php';
+require_once APP_PATH . '/models/TechVocModel.php';
 require_once APP_PATH . '/models/NotificationModel.php';
 
 // ── Controllers ───────────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ require_once APP_PATH . '/controllers/BarangayCaptainController.php';
 require_once APP_PATH . '/controllers/SecretaryController.php';
 require_once APP_PATH . '/controllers/AgencyController.php';
 require_once APP_PATH . '/controllers/ApplicantController.php';
+require_once APP_PATH . '/controllers/TechVocController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -151,6 +153,14 @@ $routes = [
     // ── Notifications ─────────────────────────────────────────────────────────
     ['POST', '/notifications/{id}/read',            'NotificationController',     'markRead'],
     ['POST', '/notifications/read-all',             'NotificationController',     'markAllRead'],
+
+    // ── TECH-VOC Supervisor ───────────────────────────────────────────────────
+    ['GET',  '/techvoc/dashboard',                  'TechVocController',          'dashboard'],
+    ['GET',  '/techvoc/class/{id}',                 'TechVocController',          'classDetail'],
+    ['POST', '/techvoc/class/{id}/add-student',     'TechVocController',          'addStudent'],
+    ['POST', '/techvoc/class/{id}/delete-student',  'TechVocController',          'deleteStudent'],
+    ['GET',  '/techvoc/class/{id}/attendance',      'TechVocController',          'attendance'],
+    ['POST', '/techvoc/class/{id}/attendance/save', 'TechVocController',          'saveAttendance'],
 ];
 
 // ── Dispatch ──────────────────────────────────────────────────────────────────
