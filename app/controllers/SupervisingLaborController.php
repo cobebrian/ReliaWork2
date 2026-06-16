@@ -194,10 +194,34 @@ class SupervisingLaborController
         $request     = $requestId ? $this->requestModel->find($requestId) : null;
         $agencies    = $this->agencyModel->findAll($requestId ? ['job_fair_request_id' => $requestId] : []);
         $requests    = $this->requestModel->findAll(['status' => 'approved']);
-        // List user accounts with role 'agency' for inviting
-        $agencyUsers = $this->userModel->findAll(['role' => 'agency', 'status' => 'active']);
-        $pageTitle   = 'Participating Agencies';
-        $success     = getFlash('success');
+        // FIX: approved (not active) — list agency accounts that have set up their profile
+        $agencyUsers = $this->userModel->findAll(['role' => 'agency', 'status' => 'approved']);
+
+        // Count vacancies per invited agency
+        $db = Database::getInstance();
+        $vacancyCountByAgency = [];
+        foreach ($agencies as $a) {
+            $vacancyCountByAgency[$a['id']] = (int)$db->fetchColumn(
+                "SELECT COUNT(*) FROM job_vacancies WHERE participating_agency_id = ?",
+                [$a['id']]
+            );
+        }
+
+        // Get confirmed resources from secretary for this job fair
+        $confirmedResources = [];
+        if ($requestId) {
+            $confirmedResources = $db->fetchAll(
+                "SELECT ra.*, br.name AS resource_name, br.unit
+                 FROM resource_allocations ra
+                 JOIN barangay_resources br ON br.id = ra.resource_id
+                 WHERE ra.job_fair_request_id = ?
+                 ORDER BY ra.created_at DESC",
+                [$requestId]
+            );
+        }
+
+        $pageTitle = 'Participating Agencies';
+        $success   = getFlash('success');
         include VIEW_PATH . '/supervising_labor/agencies.php';
     }
 
@@ -251,75 +275,70 @@ class SupervisingLaborController
         requireRole('supervising_labor');
         verifyCsrf();
 
-        $requestId  = (int)($_POST['job_fair_request_id'] ?? 0);
-        $companyIds = $_POST['company_ids'] ?? [];
-        $userIds = $_POST['user_ids'] ?? [];
+        $requestId = (int)($_POST['job_fair_request_id'] ?? 0);
+        $userIds   = $_POST['user_ids'] ?? [];
 
         if (!$requestId) {
             flash('error', 'Please select a job fair first.');
             redirect(APP_URL . '/supervising-labor/agencies');
         }
-        if (empty($companyIds) && empty($userIds)) {
+        if (empty($userIds)) {
             flash('error', 'Please select at least one agency to invite.');
             redirect(APP_URL . '/supervising-labor/agencies?request_id=' . $requestId);
         }
 
-        $invited = 0;
-        $skipped = 0;
-        // Invite by company IDs (legacy)
-        foreach ($companyIds as $companyId) {
-            $companyId = (int)$companyId;
-            $company   = $this->companyModel->find($companyId);
-            if (!$company) continue;
-
-            $db      = Database::getInstance();
-            $already = $db->fetchColumn(
-                "SELECT COUNT(*) FROM participating_agencies WHERE job_fair_request_id = ? AND email = ?",
-                [$requestId, $company['email']]
-            );
-            if ($already) { $skipped++; continue; }
-
-            // If there is a user account matching the company email, link user_id
-            $user = $this->userModel->findByEmail($company['email']);
-            $userIdToLink = ($user && ($user['role'] ?? '') === 'agency') ? (int)$user['id'] : null;
-
-            $this->agencyModel->createFromCompany($requestId, $company, $userIdToLink);
-
-            // notify company user if present
-            if ($userIdToLink) {
-                $this->notificationModel->create($userIdToLink, 'info', 'Invitation to participate', "You have been invited to participate in '{$request['title']}'.", APP_URL . '/agency/vacancies');
-            }
-            $invited++;
+        $request = $this->requestModel->find($requestId);
+        if (!$request) {
+            flash('error', 'Job fair not found.');
+            redirect(APP_URL . '/supervising-labor/agencies');
         }
 
-        // Invite by agency user accounts (preferred)
+        $db = Database::getInstance();
+        $invited = 0;
+        $skipped = 0;
+
         foreach ($userIds as $uid) {
-            $uid = (int)$uid;
+            $uid  = (int)$uid;
             $user = $this->userModel->find($uid);
             if (!$user) { $skipped++; continue; }
 
             $email = $user['email'] ?? null;
-            $db = Database::getInstance();
-            $already = $db->fetchColumn("SELECT COUNT(*) FROM participating_agencies WHERE job_fair_request_id = ? AND email = ?", [$requestId, $email]);
+
+            // Check if already invited to this job fair
+            $already = $db->fetchColumn(
+                "SELECT COUNT(*) FROM participating_agencies WHERE job_fair_request_id = ? AND user_id = ?",
+                [$requestId, $uid]
+            );
             if ($already) { $skipped++; continue; }
 
-            $agencyData = [
+            // Use agency_name from profile if set, fallback to user name
+            $agencyName = !empty($user['agency_name'])
+                ? $user['agency_name']
+                : ($user['name'] ?? ($user['firstname'] . ' ' . $user['lastname']));
+
+            $this->agencyModel->create([
                 'job_fair_request_id' => $requestId,
-                'user_id' => $uid,
-                'agency_name' => $user['name'] ?? ($user['firstname'] . ' ' . $user['lastname']),
-                'contact_person' => $user['name'] ?? null,
-                'email' => $email,
-                'phone' => $user['phone'] ?? null,
-                'address' => $user['address'] ?? null,
-            ];
-            $this->agencyModel->create($agencyData);
-            // notify the agency user
-            $this->notificationModel->create($uid, 'info', 'Invitation to participate', "You have been invited to participate in '{$request['title']}'. Please confirm on your dashboard.", APP_URL . '/agency/vacancies');
+                'user_id'             => $uid,
+                'agency_name'         => $agencyName,
+                'contact_person'      => $user['name'] ?? null,
+                'email'               => $email,
+                'phone'               => $user['phone'] ?? null,
+                'address'             => $user['agency_location'] ?? null,
+            ]);
+
+            // Notify the agency user
+            $this->notificationModel->create(
+                $uid,
+                'invitation',
+                'Job Fair Invitation',
+                "You have been invited to participate in \"{$request['title']}\". Please accept or decline on your dashboard.",
+                APP_URL . '/agency/dashboard'
+            );
             $invited++;
         }
 
-        auditLog('bulk_invite', 'agencies', "Bulk invited {$invited} companies to request ID {$requestId}.");
-        $msg = "{$invited} company/companies invited successfully.";
+        auditLog('bulk_invite', 'agencies', "Invited {$invited} agencies to request ID {$requestId}.");
+        $msg = "{$invited} agency/agencies invited successfully.";
         if ($skipped) $msg .= " {$skipped} already invited (skipped).";
         flash('success', $msg);
         redirect(APP_URL . '/supervising-labor/agencies?request_id=' . $requestId);

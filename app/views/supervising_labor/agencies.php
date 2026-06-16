@@ -61,26 +61,31 @@
                     <?php if (empty($agencyUsers)): ?>
                     <div class="text-center py-4 text-muted small">
                         <i class="bi bi-people d-block mb-1 fs-4"></i>
-                        No agency accounts found.
+                        No agency accounts found.<br>
+                        <small>Agencies must register and be approved first.</small>
                     </div>
                     <?php else: ?>
-                    <?php foreach ($agencyUsers as $u): ?>
+                    <?php foreach ($agencyUsers as $u):
+                        // Show company/agency name if profile set up, else user name
+                        $displayName = !empty($u['agency_name']) ? $u['agency_name'] : $u['name'];
+                        $displaySub  = !empty($u['agency_name']) ? ($u['agency_location'] ?? '') : $u['email'];
+                    ?>
                     <label class="company-item d-flex align-items-center gap-3 px-3 py-2 border-bottom"
                            style="cursor:pointer;transition:background .15s;"
                            onmouseover="this.style.background='#f8f9fa'"
                            onmouseout="this.style.background=''">
                         <input type="checkbox" class="form-check-input company-cb flex-shrink-0"
                                value="<?= $u['id'] ?>"
-                               data-name="<?= htmlspecialchars(strtolower($u['name']), ENT_QUOTES, 'UTF-8') ?>"
+                               data-name="<?= htmlspecialchars(strtolower($displayName), ENT_QUOTES, 'UTF-8') ?>"
                                onchange="updateCount()">
                         <div class="flex-grow-1 min-width-0">
                             <div class="fw-semibold small text-truncate">
-                                <?= htmlspecialchars($u['name'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>
                             </div>
                             <div class="text-muted" style="font-size:.75rem;">
-                                <?= htmlspecialchars($u['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                                <?php if (!empty($u['organization'])): ?>
-                                &bull; <?= htmlspecialchars($u['organization'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= htmlspecialchars($displaySub, ENT_QUOTES, 'UTF-8') ?>
+                                <?php if (!empty($u['agency_name']) && !empty($u['email'])): ?>
+                                &bull; <?= htmlspecialchars($u['email'], ENT_QUOTES, 'UTF-8') ?>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -161,11 +166,11 @@
 
     <!-- ── Right: Invited Agencies List ──────────────────────────────────── -->
     <div class="col-lg-7">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                 <h6 class="mb-0 fw-bold">
                     <i class="bi bi-building me-2 text-primary"></i>
-                    Invited Companies
+                    Invited Agencies
                     <?php if ($request): ?>
                     — <span class="text-muted fw-normal small">
                         <?= htmlspecialchars($request['title'], ENT_QUOTES, 'UTF-8') ?>
@@ -181,42 +186,47 @@
                 <div class="text-center py-5 text-muted">
                     <i class="bi bi-building display-4 d-block mb-2 opacity-50"></i>
                     <?= empty($_GET['request_id'])
-                        ? 'Select a job fair to see invited companies.'
-                        : 'No companies invited yet. Select companies on the left and send invitations.' ?>
+                        ? 'Select a job fair to see invited agencies.'
+                        : 'No agencies invited yet.' ?>
                 </div>
                 <?php else: ?>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Company</th>
-                                <th>Contact</th>
-                                <th>Email / Phone</th>
-                                <th>Status</th>
+                                <th>Agency / Company</th>
+                                <th>Email</th>
+                                <th>Response</th>
+                                <th>Vacancies</th>
                                 <th>Invited</th>
                             </tr>
                         </thead>
                         <tbody>
-                        <?php foreach ($agencies as $a): ?>
+                        <?php foreach ($agencies as $a):
+                            $vCount = $vacancyCountByAgency[$a['id']] ?? 0;
+                        ?>
                         <tr>
+                            <td class="fw-semibold">
+                                <?= htmlspecialchars($a['agency_name'], ENT_QUOTES, 'UTF-8') ?>
+                            </td>
+                            <td class="text-muted small">
+                                <?= htmlspecialchars($a['email'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
+                            </td>
                             <td>
-                                <div class="fw-semibold">
-                                    <?= htmlspecialchars($a['agency_name'], ENT_QUOTES, 'UTF-8') ?>
+                                <?= statusBadge($a['status']) ?>
+                                <?php if ($a['responded_at']): ?>
+                                <div class="text-muted" style="font-size:.7rem;">
+                                    <?= formatDate($a['responded_at']) ?>
                                 </div>
-                            </td>
-                            <td class="text-muted small">
-                                <?= htmlspecialchars($a['contact_person'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
-                            </td>
-                            <td class="text-muted small">
-                                <?php if ($a['email']): ?>
-                                <div><?= htmlspecialchars($a['email'], ENT_QUOTES, 'UTF-8') ?></div>
                                 <?php endif; ?>
-                                <?php if ($a['phone']): ?>
-                                <div><?= htmlspecialchars($a['phone'], ENT_QUOTES, 'UTF-8') ?></div>
-                                <?php endif; ?>
-                                <?php if (!$a['email'] && !$a['phone']): ?>—<?php endif; ?>
                             </td>
-                            <td><?= statusBadge($a['status']) ?></td>
+                            <td>
+                                <?php if ($vCount > 0): ?>
+                                <span class="badge bg-success"><?= $vCount ?> posted</span>
+                                <?php else: ?>
+                                <span class="text-muted small">—</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-muted small"><?= formatDate($a['invited_at']) ?></td>
                         </tr>
                         <?php endforeach; ?>
@@ -226,6 +236,43 @@
                 <?php endif; ?>
             </div>
         </div>
+
+        <!-- Confirmed Resources from Secretary -->
+        <?php if (!empty($confirmedResources)): ?>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold">
+                    <i class="bi bi-check2-all me-2 text-success"></i>
+                    Confirmed Resources (from Secretary)
+                </h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr><th>Resource</th><th>Quantity</th><th>Confirmed</th></tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($confirmedResources as $cr): ?>
+                        <tr>
+                            <td class="fw-semibold small"><?= htmlspecialchars($cr['resource_name'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><span class="badge bg-primary"><?= $cr['quantity_allocated'] ?> <?= htmlspecialchars($cr['unit'] ?? '', ENT_QUOTES, 'UTF-8') ?></span></td>
+                            <td class="text-muted small"><?= formatDate($cr['created_at']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <?php elseif (!empty($_GET['request_id'])): ?>
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-3 text-muted small">
+                <i class="bi bi-hourglass me-1"></i>
+                No resources confirmed by Secretary yet for this job fair.
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 

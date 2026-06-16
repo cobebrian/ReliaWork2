@@ -130,6 +130,7 @@ $routes = [
     ['GET',  '/secretary/dashboard',                'SecretaryController',        'dashboard'],
     ['GET',  '/secretary/resources',                'SecretaryController',        'resources'],
     ['POST', '/secretary/resources/store',          'SecretaryController',        'storeResource'],
+    ['POST', '/secretary/resources/confirm',        'SecretaryController',        'confirmResources'],
     ['POST', '/secretary/resources/{id}/update',    'SecretaryController',        'updateResource'],
     ['POST', '/secretary/resources/allocate',       'SecretaryController',        'allocateResource'],
     ['GET',  '/secretary/requests',                 'SecretaryController',        'requests'],
@@ -138,6 +139,8 @@ $routes = [
 
     // ── Agency ────────────────────────────────────────────────────────────────
     ['GET',  '/agency/dashboard',                   'AgencyController',           'dashboard'],
+    ['GET',  '/agency/setup',                       'AgencyController',           'showSetup'],
+    ['POST', '/agency/setup',                       'AgencyController',           'saveSetup'],
     ['POST', '/agency/confirm/{id}',                'AgencyController',           'confirmParticipation'],
     ['GET',  '/agency/vacancies',                   'AgencyController',           'vacancies'],
     ['POST', '/agency/vacancies/store',             'AgencyController',           'storeVacancy'],

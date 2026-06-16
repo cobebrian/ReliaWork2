@@ -123,7 +123,90 @@ class SecretaryController
             $editResource = $this->resourceModel->find((int)$_GET['edit']);
         }
 
+        // Past confirmations
+        $db = Database::getInstance();
+        $confirmations = $db->fetchAll(
+            "SELECT ra.*, br.name AS resource_name, jfr.title AS job_fair_title
+             FROM resource_allocations ra
+             JOIN barangay_resources br ON br.id = ra.resource_id
+             JOIN job_fair_requests jfr ON jfr.id = ra.job_fair_request_id
+             ORDER BY ra.created_at DESC LIMIT 20"
+        );
+
         include VIEW_PATH . '/secretary/resources.php';
+    }
+
+    // POST /secretary/resources/confirm — Checkbox-based resource confirmation for a job fair
+    public function confirmResources(): void
+    {
+        requireRole('secretary');
+        verifyCsrf();
+
+        $requestId   = (int)($_POST['job_fair_request_id'] ?? 0);
+        $resourceIds = $_POST['resource_ids'] ?? [];
+        $notes       = trim($_POST['notes'] ?? '');
+
+        if (!$requestId) {
+            flash('error', 'Please select a job fair.');
+            redirect(APP_URL . '/secretary/resources');
+        }
+        if (empty($resourceIds)) {
+            flash('error', 'Please check at least one resource.');
+            redirect(APP_URL . '/secretary/resources');
+        }
+
+        $request = $this->requestModel->find($requestId);
+        if (!$request) {
+            flash('error', 'Job fair not found.');
+            redirect(APP_URL . '/secretary/resources');
+        }
+
+        $db        = Database::getInstance();
+        $confirmed = 0;
+
+        foreach ($resourceIds as $resourceId) {
+            $resourceId = (int)$resourceId;
+            $resource   = $this->resourceModel->find($resourceId);
+            if (!$resource || $resource['status'] !== 'available') continue;
+
+            // Check not already allocated
+            $already = $db->fetchColumn(
+                "SELECT COUNT(*) FROM resource_allocations WHERE job_fair_request_id = ? AND resource_id = ?",
+                [$requestId, $resourceId]
+            );
+            if ($already) continue;
+
+            $db->execute(
+                "INSERT INTO resource_allocations (job_fair_request_id, resource_id, quantity_allocated, notes, allocated_by, created_at)
+                 VALUES (?, ?, ?, ?, ?, NOW())",
+                [$requestId, $resourceId, $resource['quantity'], $notes ?: null, currentUser()['id']]
+            );
+            $confirmed++;
+        }
+
+        // Notify supervising_labor
+        $supervisors = $db->fetchAll(
+            "SELECT id FROM users WHERE role = 'supervising_labor' AND status = 'approved'"
+        );
+        $resourceNames = [];
+        foreach ($resourceIds as $rid) {
+            $r = $this->resourceModel->find((int)$rid);
+            if ($r) $resourceNames[] = $r['name'];
+        }
+        $resourceList = implode(', ', $resourceNames);
+        foreach ($supervisors as $sup) {
+            $this->notificationModel->create(
+                $sup['id'],
+                'resources_confirmed',
+                'Resources Confirmed by Secretary',
+                "Secretary confirmed available resources for \"{$request['title']}\": {$resourceList}.",
+                APP_URL . '/supervising-labor/agencies?request_id=' . $requestId
+            );
+        }
+
+        auditLog('confirm_resources', 'resources', "Secretary confirmed {$confirmed} resources for request ID {$requestId}.");
+        flash('success', "{$confirmed} resource(s) confirmed for \"{$request['title']}\". Supervising Labor notified.");
+        redirect(APP_URL . '/secretary/resources');
     }
 
     // POST /secretary/resources/store
