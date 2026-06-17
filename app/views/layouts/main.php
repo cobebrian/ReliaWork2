@@ -68,6 +68,13 @@ switch ($role) {
             ['url' => APP_URL . '/techvoc/class/2/attendance',       'icon' => 'bi-clipboard-check', 'label' => 'Electrical Attendance'],
         ];
         break;
+    case 'bedo':
+        $navLinks = [
+            ['url' => APP_URL . '/bedo/dashboard',    'icon' => 'bi-speedometer2',      'label' => 'Dashboard'],
+            ['url' => APP_URL . '/bedo/compose',      'icon' => 'bi-megaphone-fill',     'label' => 'Post Job Fair Ad'],
+            ['url' => APP_URL . '/bedo/posts',        'icon' => 'bi-collection',         'label' => 'My Posts'],
+        ];
+        break;
 }
 
 $currentUrl = APP_URL . strtok($_SERVER['REQUEST_URI'] ?? '/', '?');

@@ -12,6 +12,17 @@ class AuthController
         $this->userModel = new UserModel();
     }
 
+    // GET / (public landing page)
+    public function showLanding(): void
+    {
+        // If logged in, go to dashboard instead of landing
+        if (isLoggedIn()) {
+            redirect(roleDashboardUrl(currentUser()['role']));
+        }
+        // Render public landing page
+        BedoController::landingPage();
+    }
+
     // GET /login
     public function showLogin(): void
     {
@@ -51,7 +62,8 @@ class AuthController
 
         if ($user['status'] === 'pending') {
             flash('error', 'Your account is awaiting admin approval. Please check back later.');
-            redirect(APP_URL . '/login');
+            $referer = $_SERVER['HTTP_REFERER'] ?? '';
+            redirect(str_contains($referer, APP_URL . '/login') ? APP_URL . '/login' : APP_URL . '/');
         }
 
         if ($user['status'] === 'rejected') {
@@ -181,6 +193,6 @@ class AuthController
         }
         session_destroy();
 
-        redirect(APP_URL . '/login');
+        redirect(APP_URL . '/');
     }
 }

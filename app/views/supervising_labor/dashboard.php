@@ -1,4 +1,37 @@
 <?php ob_start(); ?>
+
+<!-- Notifications Banner -->
+<?php if (!empty($notifications)): ?>
+<div class="mb-4">
+    <?php foreach ($notifications as $notif): ?>
+    <?php
+    $iconMap = [
+        'agency_accepted'     => ['icon' => 'bi-check-circle-fill',    'color' => 'success'],
+        'agency_declined'     => ['icon' => 'bi-x-circle-fill',        'color' => 'danger'],
+        'new_vacancy'         => ['icon' => 'bi-briefcase-fill',        'color' => 'primary'],
+        'resources_confirmed' => ['icon' => 'bi-box-seam-fill',        'color' => 'info'],
+        'default'             => ['icon' => 'bi-bell-fill',             'color' => 'secondary'],
+    ];
+    $nc = $iconMap[$notif['type']] ?? $iconMap['default'];
+    ?>
+    <div class="alert alert-<?= $nc['color'] ?> alert-dismissible fade show d-flex align-items-start gap-3 mb-2">
+        <i class="bi <?= $nc['icon'] ?> fs-5 flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">
+            <div class="fw-bold"><?= htmlspecialchars($notif['title'], ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="small"><?= htmlspecialchars($notif['message'], ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="text-muted small mt-1"><?= formatDate($notif['created_at'], 'M d, Y H:i') ?></div>
+        </div>
+        <?php if ($notif['link']): ?>
+        <a href="<?= htmlspecialchars($notif['link'], ENT_QUOTES, 'UTF-8') ?>"
+           class="btn btn-sm btn-outline-<?= $nc['color'] ?> flex-shrink-0">
+            View <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+        <?php endif; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <div class="row g-4 mb-4">
     <div class="col-sm-6 col-xl-3">
         <div class="card stat-card border-0 shadow-sm">

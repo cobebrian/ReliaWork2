@@ -81,7 +81,9 @@ class VacancyModel
         $sets   = [];
         $params = [];
         $allowed = ['company_name', 'company_location', 'mobile_number', 'gmail_address',
-                    'position', 'available_slots', 'qualifications', 'status', 'remarks', 'remarks_by'];
+                    'position', 'available_slots', 'qualifications', 'status', 'remarks', 'remarks_by',
+                    'sl_status', 'sl_remarks', 'sl_processed_by', 'sl_processed_at',
+                    'reviewed_by', 'reviewed_at'];
         foreach ($allowed as $field) {
             if (array_key_exists($field, $data)) {
                 $sets[]   = "{$field} = ?";

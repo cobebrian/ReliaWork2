@@ -37,6 +37,7 @@ require_once APP_PATH . '/controllers/SecretaryController.php';
 require_once APP_PATH . '/controllers/AgencyController.php';
 require_once APP_PATH . '/controllers/ApplicantController.php';
 require_once APP_PATH . '/controllers/TechVocController.php';
+require_once APP_PATH . '/controllers/BedoController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -79,7 +80,7 @@ function matchRoute(string $pattern, string $path): array|false
 
 $routes = [
     // ── Auth ──────────────────────────────────────────────────────────────────
-    ['GET',  '/',                                   'AuthController',             'showLogin'],
+    ['GET',  '/',                                   'AuthController',             'showLanding'],
     ['GET',  '/login',                              'AuthController',             'showLogin'],
     ['POST', '/login',                              'AuthController',             'login'],
     ['GET',  '/register',                           'AuthController',             'showRegister'],
@@ -115,6 +116,8 @@ $routes = [
     ['POST', '/supervising-labor/vacancies/store',  'SupervisingLaborController', 'storeVacancy'],
     ['GET',  '/supervising-labor/vacancies/review', 'SupervisingLaborController', 'vacanciesReview'],
     ['POST', '/supervising-labor/vacancies/{id}/remarks', 'SupervisingLaborController', 'addVacancyRemarks'],
+    ['POST', '/supervising-labor/vacancies/{id}/accept',  'SupervisingLaborController', 'acceptVacancy'],
+    ['POST', '/supervising-labor/vacancies/{id}/reject',  'SupervisingLaborController', 'rejectVacancy'],
     ['GET',  '/supervising-labor/registration-form/{id}', 'SupervisingLaborController', 'registrationForm'],
     ['POST', '/supervising-labor/registration-form/{id}/store', 'SupervisingLaborController', 'storeRegistrationForm'],
 
@@ -131,8 +134,8 @@ $routes = [
     ['GET',  '/secretary/resources',                'SecretaryController',        'resources'],
     ['POST', '/secretary/resources/store',          'SecretaryController',        'storeResource'],
     ['POST', '/secretary/resources/confirm',        'SecretaryController',        'confirmResources'],
-    ['POST', '/secretary/resources/{id}/update',    'SecretaryController',        'updateResource'],
     ['POST', '/secretary/resources/allocate',       'SecretaryController',        'allocateResource'],
+    ['POST', '/secretary/resources/{id}/update',    'SecretaryController',        'updateResource'],
     ['GET',  '/secretary/requests',                 'SecretaryController',        'requests'],
     ['GET',  '/secretary/requests/{id}/confirm',    'SecretaryController',        'confirmRequestForm'],
     ['POST', '/secretary/requests/{id}/confirm',    'SecretaryController',        'confirmRequest'],
@@ -153,7 +156,14 @@ $routes = [
     ['POST', '/applicant/apply/{id}',               'ApplicantController',        'apply'],
     ['GET',  '/applicant/my-applications',          'ApplicantController',        'myApplications'],
 
-    // ── Notifications ─────────────────────────────────────────────────────────
+    // ── BEDO Officer ──────────────────────────────────────────────────────────
+    ['GET',  '/bedo/dashboard',              'BedoController', 'dashboard'],
+    ['GET',  '/bedo/compose',                'BedoController', 'compose'],
+    ['GET',  '/bedo/compose/preview/{id}',   'BedoController', 'previewJobFair'],
+    ['POST', '/bedo/posts/store',            'BedoController', 'store'],
+    ['GET',  '/bedo/posts',                  'BedoController', 'posts'],
+    ['POST', '/bedo/posts/{id}/publish',     'BedoController', 'publish'],
+    ['POST', '/bedo/posts/{id}/delete',      'BedoController', 'deletePost'],
     ['POST', '/notifications/{id}/read',            'NotificationController',     'markRead'],
     ['POST', '/notifications/read-all',             'NotificationController',     'markAllRead'],
 
