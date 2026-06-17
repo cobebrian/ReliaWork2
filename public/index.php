@@ -27,6 +27,7 @@ require_once APP_PATH . '/models/ApplicationModel.php';
 require_once APP_PATH . '/models/AnnouncementModel.php';
 require_once APP_PATH . '/models/TechVocModel.php';
 require_once APP_PATH . '/models/NotificationModel.php';
+require_once APP_PATH . '/models/JobFairPostModel.php';
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 require_once APP_PATH . '/controllers/AuthController.php';
@@ -120,6 +121,7 @@ $routes = [
     ['POST', '/supervising-labor/vacancies/{id}/reject',  'SupervisingLaborController', 'rejectVacancy'],
     ['GET',  '/supervising-labor/registration-form/{id}', 'SupervisingLaborController', 'registrationForm'],
     ['POST', '/supervising-labor/registration-form/{id}/store', 'SupervisingLaborController', 'storeRegistrationForm'],
+    ['GET',  '/supervising-labor/registration-forms',   'SupervisingLaborController', 'registrationForms'],
 
     // ── Barangay Captain ──────────────────────────────────────────────────────
     ['GET',  '/barangay-captain/dashboard',         'BarangayCaptainController',  'dashboard'],
@@ -155,6 +157,11 @@ $routes = [
     ['GET',  '/applicant/vacancies',                'ApplicantController',        'vacancies'],
     ['POST', '/applicant/apply/{id}',               'ApplicantController',        'apply'],
     ['GET',  '/applicant/my-applications',          'ApplicantController',        'myApplications'],
+    ['GET',  '/applicant/job-fairs',                'ApplicantController',        'jobFairs'],
+    ['GET',  '/applicant/job-fairs/{id}/register',  'ApplicantController',        'showFairRegistration'],
+    ['POST', '/applicant/job-fairs/{id}/register',  'ApplicantController',        'storeFairRegistration'],
+    ['GET',  '/applicant/job-fairs/{id}/confirmation', 'ApplicantController',     'registrationConfirmation'],
+    ['GET',  '/applicant/job-fairs/{id}/pdf',       'ApplicantController',        'downloadPdf'],
 
     // ── BEDO Officer ──────────────────────────────────────────────────────────
     ['GET',  '/bedo/dashboard',              'BedoController', 'dashboard'],

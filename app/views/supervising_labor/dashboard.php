@@ -129,7 +129,7 @@
                                             <i class="bi bi-eye me-1"></i>Review
                                         </a>
                                     <?php endif; ?>
-                                    <a href="<?= APP_URL ?>/supervising-labor/registration-form/<?= $r['id'] ?>"
+                                    <a href="<?= APP_URL ?>/supervising-labor/registration-forms"
                                        class="btn btn-sm btn-outline-secondary ms-1">
                                         <i class="bi bi-file-earmark-text me-1"></i>Process 7
                                     </a>

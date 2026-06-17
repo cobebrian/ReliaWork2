@@ -7,6 +7,20 @@ class ApplicantModel
 {
     private Database $db;
 
+    // All NSRP Form 1 fields allowed for create/update
+    private const NSRP_FIELDS = [
+        'surname', 'firstname', 'middlename', 'suffix',
+        'date_of_birth', 'place_of_birth', 'sex', 'religion', 'civil_status',
+        'present_address', 'height', 'tin',
+        'email', 'landline', 'cellphone',
+        'gsis_sss_no', 'pag_ibig_no', 'philhealth_no', 'disability',
+        'employment_status', 'actively_looking', 'willing_immediate',
+        'is_4ps', 'household_id',
+        'preferred_occupation', 'preferred_location', 'expected_salary',
+        'passport_no', 'educational_bg', 'trainings', 'eligibility',
+        'work_experience', 'other_skills',
+    ];
+
     public function __construct()
     {
         $this->db = Database::getInstance();
@@ -15,7 +29,7 @@ class ApplicantModel
     public function find(int $id): array|false
     {
         return $this->db->fetch(
-            "SELECT a.*, u.name, u.email
+            "SELECT a.*, u.name AS user_name, u.email AS user_email
              FROM applicants a
              LEFT JOIN users u ON u.id = a.user_id
              WHERE a.id = ?",
@@ -26,7 +40,7 @@ class ApplicantModel
     public function findByUserId(int $userId): array|false
     {
         return $this->db->fetch(
-            "SELECT a.*, u.name, u.email
+            "SELECT a.*, u.name AS user_name, u.email AS user_email
              FROM applicants a
              LEFT JOIN users u ON u.id = a.user_id
              WHERE a.user_id = ?",
@@ -36,7 +50,7 @@ class ApplicantModel
 
     public function findAll(array $filters = []): array
     {
-        $sql    = "SELECT a.*, u.name AS user_name, u.email
+        $sql    = "SELECT a.*, u.name AS user_name, u.email AS user_email
                    FROM applicants a
                    LEFT JOIN users u ON u.id = a.user_id
                    WHERE 1=1";
@@ -45,9 +59,7 @@ class ApplicantModel
         if (!empty($filters['search'])) {
             $sql .= " AND (a.surname LIKE ? OR a.firstname LIKE ? OR u.email LIKE ?)";
             $like = '%' . $filters['search'] . '%';
-            $params[] = $like;
-            $params[] = $like;
-            $params[] = $like;
+            $params = array_merge($params, [$like, $like, $like]);
         }
         if (!empty($filters['job_fair_request_id'])) {
             $sql .= " AND EXISTS (
@@ -65,20 +77,42 @@ class ApplicantModel
 
     public function create(array $data): int
     {
+        $cols   = ['user_id'];
+        $vals   = [$data['user_id']];
+        $placeholders = ['?'];
+
+        foreach (self::NSRP_FIELDS as $field) {
+            if (array_key_exists($field, $data)) {
+                $cols[]         = $field;
+                $vals[]         = $data[$field];
+                $placeholders[] = '?';
+            }
+        }
+
+        // Legacy: map disability_status → disability
+        if (array_key_exists('disability_status', $data) && !array_key_exists('disability', $data)) {
+            $cols[]         = 'disability';
+            $vals[]         = $data['disability_status'];
+            $placeholders[] = '?';
+        }
+
+        $cols[]         = 'created_at';
+        $vals[]         = date('Y-m-d H:i:s');
+        $placeholders[] = 'NOW()';
+        $cols[]         = 'updated_at';
+        $vals[]         = date('Y-m-d H:i:s');
+        $placeholders[] = 'NOW()';
+
+        // Remove the manual date strings we added; use SQL NOW() instead
+        array_pop($vals); // updated_at placeholder
+        array_pop($vals); // created_at placeholder
+
+        $colList   = implode(', ', $cols);
+        $phList    = implode(', ', $placeholders);
+
         $this->db->execute(
-            "INSERT INTO applicants 
-             (user_id, surname, firstname, middlename, gsis_sss_no, pag_ibig_no, philhealth_no, disability_status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
-            [
-                $data['user_id'],
-                $data['surname'],
-                $data['firstname'],
-                $data['middlename'] ?? null,
-                $data['gsis_sss_no'] ?? null,
-                $data['pag_ibig_no'] ?? null,
-                $data['philhealth_no'] ?? null,
-                $data['disability_status'] ?? 'none',
-            ]
+            "INSERT INTO applicants ({$colList}) VALUES ({$phList})",
+            $vals
         );
         return (int)$this->db->lastInsertId();
     }
@@ -87,13 +121,19 @@ class ApplicantModel
     {
         $sets   = [];
         $params = [];
-        $allowed = ['surname', 'firstname', 'middlename', 'gsis_sss_no', 'pag_ibig_no', 'philhealth_no', 'disability_status'];
-        foreach ($allowed as $field) {
+
+        foreach (self::NSRP_FIELDS as $field) {
             if (array_key_exists($field, $data)) {
                 $sets[]   = "{$field} = ?";
                 $params[] = $data[$field];
             }
         }
+        // Legacy
+        if (array_key_exists('disability_status', $data) && !array_key_exists('disability', $data)) {
+            $sets[]   = "disability = ?";
+            $params[] = $data['disability_status'];
+        }
+
         if (empty($sets)) return false;
         $sets[]   = "updated_at = NOW()";
         $params[] = $id;

@@ -569,60 +569,118 @@ class SupervisingLaborController
         redirect(APP_URL . '/supervising-labor/vacancies/review');
     }
 
-    // GET /supervising-labor/registration-form/{requestId}
-    public function registrationForm(int $requestId): void
+    // GET /supervising-labor/registration-forms — list all published job fair posts for SL
+    public function registrationForms(): void
     {
         requireRole('supervising_labor');
 
-        $request    = $this->requestModel->find($requestId);
-        if (!$request) {
-            flash('error', 'Job fair request not found.');
-            redirect(APP_URL . '/supervising-labor/requests');
+        $db    = Database::getInstance();
+        $posts = $db->fetchAll(
+            "SELECT p.*,
+                    jfr.title AS fair_title, jfr.requested_date, jfr.venue AS fair_venue,
+                    COUNT(DISTINCT jfr_reg.applicant_id) AS registered_count
+             FROM job_fair_posts p
+             JOIN job_fair_requests jfr ON jfr.id = p.job_fair_request_id
+             LEFT JOIN job_fair_registrations jfr_reg ON jfr_reg.job_fair_post_id = p.id
+             WHERE p.status = 'published'
+             GROUP BY p.id
+             ORDER BY p.event_date DESC, p.created_at DESC"
+        );
+
+        $pageTitle = 'Job Fair Registration Forms';
+        include VIEW_PATH . '/supervising_labor/registration_forms.php';
+    }
+
+    // GET /supervising-labor/registration-form/{postId}
+    // Now uses job_fair_posts + job_fair_registrations (online registrations by job seekers)
+    public function registrationForm(int $postId): void
+    {
+        requireRole('supervising_labor');
+
+        $db   = Database::getInstance();
+        $post = $db->fetch(
+            "SELECT p.*, jfr.title AS fair_title, jfr.requested_date, jfr.venue AS fair_venue
+             FROM job_fair_posts p
+             JOIN job_fair_requests jfr ON jfr.id = p.job_fair_request_id
+             WHERE p.id = ?",
+            [$postId]
+        );
+
+        if (!$post) {
+            // Fallback: try by job_fair_request_id (legacy)
+            $request = $this->requestModel->find($postId);
+            if (!$request) {
+                flash('error', 'Job fair not found.');
+                redirect(APP_URL . '/supervising-labor/requests');
+            }
+            // Use old applicants logic for legacy
+            $applicants = $this->applicantModel->findAll(['job_fair_request_id' => $postId]);
+            $pageTitle  = 'Registration Form — ' . $request['title'];
+            $post       = $request;
+            $isLegacy   = true;
+            include VIEW_PATH . '/supervising_labor/registration_form.php';
+            return;
         }
 
-        $applicants = $this->applicantModel->findAll(['job_fair_request_id' => $requestId]);
-        $pageTitle  = 'Registration Form - ' . $request['title'];
+        // Load online registrations for this post
+        $postModel  = new JobFairPostModel();
+        $applicants = $postModel->getRegistrations($postId);
+        $companies  = $postModel->getCompaniesAndVacancies($postId);
+        $regCount   = count($applicants);
+        $pageTitle  = 'Registration Form — ' . $post['title'];
+        $isLegacy   = false;
+
         include VIEW_PATH . '/supervising_labor/registration_form.php';
     }
 
-    // POST /supervising-labor/registration-form/{requestId}/store
-    public function storeRegistrationForm(int $requestId): void
+    // POST /supervising-labor/registration-form/{id}/store
+    // SL can manually add a walk-in registrant to the job fair
+    public function storeRegistrationForm(int $postId): void
     {
         requireRole('supervising_labor');
         verifyCsrf();
 
-        $request = $this->requestModel->find($requestId);
-        if (!$request) {
-            flash('error', 'Job fair request not found.');
+        $db   = Database::getInstance();
+        $post = $db->fetch("SELECT * FROM job_fair_posts WHERE id = ?", [$postId]);
+        if (!$post) {
+            flash('error', 'Job fair post not found.');
             redirect(APP_URL . '/supervising-labor/requests');
         }
 
-        $surname        = trim($_POST['surname'] ?? '');
-        $firstname      = trim($_POST['firstname'] ?? '');
-        $middlename     = trim($_POST['middlename'] ?? '');
-        $gsis_sss_no    = trim($_POST['gsis_sss_no'] ?? '');
-        $pag_ibig_no    = trim($_POST['pag_ibig_no'] ?? '');
-        $philhealth_no  = trim($_POST['philhealth_no'] ?? '');
-        $disability     = trim($_POST['disability_status'] ?? 'none');
+        $surname    = trim($_POST['surname'] ?? '');
+        $firstname  = trim($_POST['firstname'] ?? '');
+        $middlename = trim($_POST['middlename'] ?? '');
+        $gsisSssNo  = trim($_POST['gsis_sss_no'] ?? '');
+        $pagIbigNo  = trim($_POST['pag_ibig_no'] ?? '');
+        $philhealthNo = trim($_POST['philhealth_no'] ?? '');
+        $disability = trim($_POST['disability'] ?? '');
 
         if (empty($surname) || empty($firstname)) {
             flash('error', 'Lastname and Firstname are required.');
-            redirect(APP_URL . '/supervising-labor/registration-form/' . $requestId);
+            redirect(APP_URL . '/supervising-labor/registration-form/' . $postId);
         }
 
-        $this->applicantModel->create([
-            'user_id'         => null,
-            'surname'         => $surname,
-            'firstname'       => $firstname,
-            'middlename'      => $middlename ?: null,
-            'gsis_sss_no'     => $gsis_sss_no ?: null,
-            'pag_ibig_no'     => $pag_ibig_no ?: null,
-            'philhealth_no'   => $philhealth_no ?: null,
-            'disability_status' => $disability ?: 'none',
+        // Create walk-in applicant (no user account)
+        $applicantId = $this->applicantModel->create([
+            'user_id'      => null,
+            'surname'      => $surname,
+            'firstname'    => $firstname,
+            'middlename'   => $middlename ?: null,
+            'gsis_sss_no'  => $gsisSssNo ?: null,
+            'pag_ibig_no'  => $pagIbigNo ?: null,
+            'philhealth_no'=> $philhealthNo ?: null,
+            'disability'   => $disability ?: null,
         ]);
 
-        auditLog('create_applicant_via_regform', 'applicants', "Created applicant {$surname}, {$firstname} for job fair ID {$requestId}.");
-        flash('success', 'Applicant registered successfully.');
-        redirect(APP_URL . '/supervising-labor/registration-form/' . $requestId);
+        // Register them for the post
+        $db->execute(
+            "INSERT IGNORE INTO job_fair_registrations (job_fair_post_id, applicant_id, registered_at)
+             VALUES (?, ?, NOW())",
+            [$postId, $applicantId]
+        );
+
+        auditLog('sl_walkin_registrant', 'applicants', "SL added walk-in: {$surname}, {$firstname} for post ID {$postId}.");
+        flash('success', "Walk-in registrant {$surname}, {$firstname} added.");
+        redirect(APP_URL . '/supervising-labor/registration-form/' . $postId);
     }
 }
