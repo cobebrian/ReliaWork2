@@ -34,16 +34,16 @@ function requireLogin(): void
 }
 
 /**
- * Require one of the given roles; redirect with 403 if not authorized.
+ * Require one of the given roles; redirect to own dashboard if not authorized.
  */
 function requireRole(string ...$roles): void
 {
     requireLogin();
     $user = currentUser();
     if (!$user || !in_array($user['role'], $roles, true)) {
-        http_response_code(403);
-        include VIEW_PATH . '/errors/403.php';
-        exit;
+        // Redirect to their own dashboard instead of a raw 403
+        flash('error', 'You do not have permission to access that page.');
+        redirect(roleDashboardUrl($user['role'] ?? ''));
     }
 }
 
