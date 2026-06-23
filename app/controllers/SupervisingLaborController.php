@@ -238,11 +238,11 @@ class SupervisingLaborController
         $confirmedResources = [];
         if ($requestId) {
             $confirmedResources = $db->fetchAll(
-                "SELECT ra.*, r.name AS resource_name, r.unit
+                "SELECT ra.*, br.name AS resource_name, br.unit
                  FROM resource_allocations ra
-                 JOIN resources r ON r.id = ra.resource_id
-                 WHERE ra.job_fair_request_id = ? AND ra.status = 'confirmed'
-                 ORDER BY r.name",
+                 JOIN barangay_resources br ON br.id = ra.resource_id
+                 WHERE ra.job_fair_request_id = ? AND ra.confirmed_at IS NOT NULL
+                 ORDER BY br.name",
                 [$requestId]
             );
         }
