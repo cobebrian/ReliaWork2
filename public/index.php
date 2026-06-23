@@ -9,6 +9,14 @@ declare(strict_types=1);
 define('ROOT_PATH', dirname(__DIR__));
 
 require_once ROOT_PATH . '/app/config/config.php';
+// Enable error display in development for debugging
+if (defined('APP_DEBUG') && APP_DEBUG) {
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+    error_reporting(E_ALL);
+} else {
+    ini_set('display_errors', '0');
+}
 require_once ROOT_PATH . '/app/config/Database.php';
 require_once ROOT_PATH . '/app/helpers/auth_helper.php';
 require_once ROOT_PATH . '/app/helpers/flash_helper.php';
@@ -21,16 +29,17 @@ require_once APP_PATH . '/models/JobFairRequestModel.php';
 require_once APP_PATH . '/models/AgencyModel.php';
 require_once APP_PATH . '/models/CompanyModel.php';
 require_once APP_PATH . '/models/VacancyModel.php';
+require_once APP_PATH . '/models/JobFairPostModel.php';
 require_once APP_PATH . '/models/ResourceModel.php';
 require_once APP_PATH . '/models/ApplicantModel.php';
 require_once APP_PATH . '/models/ApplicationModel.php';
 require_once APP_PATH . '/models/AnnouncementModel.php';
 require_once APP_PATH . '/models/TechVocModel.php';
 require_once APP_PATH . '/models/NotificationModel.php';
-require_once APP_PATH . '/models/JobFairPostModel.php';
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 require_once APP_PATH . '/controllers/AuthController.php';
+require_once APP_PATH . '/controllers/BedoController.php';
 require_once APP_PATH . '/controllers/AdminController.php';
 require_once APP_PATH . '/controllers/SupervisingLaborController.php';
 require_once APP_PATH . '/controllers/BarangayCaptainController.php';
@@ -38,7 +47,7 @@ require_once APP_PATH . '/controllers/SecretaryController.php';
 require_once APP_PATH . '/controllers/AgencyController.php';
 require_once APP_PATH . '/controllers/ApplicantController.php';
 require_once APP_PATH . '/controllers/TechVocController.php';
-require_once APP_PATH . '/controllers/BedoController.php';
+require_once APP_PATH . '/controllers/NotificationController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -119,9 +128,9 @@ $routes = [
     ['POST', '/supervising-labor/vacancies/{id}/remarks', 'SupervisingLaborController', 'addVacancyRemarks'],
     ['POST', '/supervising-labor/vacancies/{id}/accept',  'SupervisingLaborController', 'acceptVacancy'],
     ['POST', '/supervising-labor/vacancies/{id}/reject',  'SupervisingLaborController', 'rejectVacancy'],
+    ['GET',  '/supervising-labor/registration-forms',     'SupervisingLaborController', 'registrationForms'],
     ['GET',  '/supervising-labor/registration-form/{id}', 'SupervisingLaborController', 'registrationForm'],
     ['POST', '/supervising-labor/registration-form/{id}/store', 'SupervisingLaborController', 'storeRegistrationForm'],
-    ['GET',  '/supervising-labor/registration-forms',   'SupervisingLaborController', 'registrationForms'],
 
     // ── Barangay Captain ──────────────────────────────────────────────────────
     ['GET',  '/barangay-captain/dashboard',         'BarangayCaptainController',  'dashboard'],
@@ -164,15 +173,13 @@ $routes = [
     ['GET',  '/applicant/job-fairs/{id}/pdf',       'ApplicantController',        'downloadPdf'],
 
     // ── BEDO Officer ──────────────────────────────────────────────────────────
-    ['GET',  '/bedo/dashboard',              'BedoController', 'dashboard'],
-    ['GET',  '/bedo/compose',                'BedoController', 'compose'],
-    ['GET',  '/bedo/compose/preview/{id}',   'BedoController', 'previewJobFair'],
-    ['POST', '/bedo/posts/store',            'BedoController', 'store'],
-    ['GET',  '/bedo/posts',                  'BedoController', 'posts'],
-    ['POST', '/bedo/posts/{id}/publish',     'BedoController', 'publish'],
-    ['POST', '/bedo/posts/{id}/delete',      'BedoController', 'deletePost'],
-    ['POST', '/notifications/{id}/read',            'NotificationController',     'markRead'],
-    ['POST', '/notifications/read-all',             'NotificationController',     'markAllRead'],
+    ['GET',  '/bedo/dashboard',                     'BedoController',             'dashboard'],
+    ['GET',  '/bedo/compose',                       'BedoController',             'compose'],
+    ['GET',  '/bedo/compose/preview/{id}',          'BedoController',             'previewJobFair'],
+    ['POST', '/bedo/posts/store',                   'BedoController',             'store'],
+    ['GET',  '/bedo/posts',                         'BedoController',             'posts'],
+    ['POST', '/bedo/posts/{id}/publish',            'BedoController',             'publish'],
+    ['POST', '/bedo/posts/{id}/delete',             'BedoController',             'deletePost'],
 
     // ── TECH-VOC Supervisor ───────────────────────────────────────────────────
     ['GET',  '/techvoc/dashboard',                  'TechVocController',          'dashboard'],
@@ -181,17 +188,21 @@ $routes = [
     ['POST', '/techvoc/class/{id}/delete-student',  'TechVocController',          'deleteStudent'],
     ['GET',  '/techvoc/class/{id}/attendance',      'TechVocController',          'attendance'],
     ['POST', '/techvoc/class/{id}/attendance/save', 'TechVocController',          'saveAttendance'],
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+    ['POST', '/notifications/{id}/read',            'NotificationController',     'markRead'],
+    ['POST', '/notifications/read-all',             'NotificationController',     'markAllRead'],
 ];
 
 // ── Dispatch ──────────────────────────────────────────────────────────────────
 $dispatched = false;
 
-// Special: /dashboard → role-based redirect
+// Special: /dashboard → role-based redirect. Guests see public landing.
 if ($method === 'GET' && $path === '/dashboard') {
     if (isLoggedIn()) {
         redirect(roleDashboardUrl(currentUser()['role']));
     } else {
-        redirect(APP_URL . '/login');
+        redirect(APP_URL . '/');
     }
 }
 
