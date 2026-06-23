@@ -11,6 +11,7 @@ class SupervisingLaborController
     private CompanyModel $companyModel;
     private VacancyModel $vacancyModel;
     private ApplicantModel $applicantModel;
+    private JobFairPostModel $postModel;
     private UserModel $userModel;
     private NotificationModel $notificationModel;
 
@@ -22,6 +23,7 @@ class SupervisingLaborController
         $this->companyModel   = new CompanyModel();
         $this->vacancyModel   = new VacancyModel();
         $this->applicantModel = new ApplicantModel();
+        $this->postModel      = new JobFairPostModel();
         $this->userModel      = new UserModel();
         $this->notificationModel = new NotificationModel();
     }
@@ -39,13 +41,6 @@ class SupervisingLaborController
         ];
 
         $recentRequests = array_slice($this->requestModel->findAll(), 0, 5);
-
-        // Load unread notifications for this user
-        $notifModel        = new NotificationModel();
-        $userId            = (int)currentUser()['id'];
-        $notifications     = $notifModel->getUnread($userId);
-        $unreadCount       = count($notifications);
-
         $pageTitle = 'Supervising Labor Dashboard';
         include VIEW_PATH . '/supervising_labor/dashboard.php';
     }
@@ -201,34 +196,59 @@ class SupervisingLaborController
         $request     = $requestId ? $this->requestModel->find($requestId) : null;
         $agencies    = $this->agencyModel->findAll($requestId ? ['job_fair_request_id' => $requestId] : []);
         $requests    = $this->requestModel->findAll(['status' => 'approved']);
-        // FIX: approved (not active) — list agency accounts that have set up their profile
-        $agencyUsers = $this->userModel->findAll(['role' => 'agency', 'status' => 'approved']);
 
-        // Count vacancies per invited agency
+        // Pull approved agency accounts directly from users table
         $db = Database::getInstance();
-        $vacancyCountByAgency = [];
-        foreach ($agencies as $a) {
-            $vacancyCountByAgency[$a['id']] = (int)$db->fetchColumn(
-                "SELECT COUNT(*) FROM job_vacancies WHERE participating_agency_id = ?",
-                [$a['id']]
+        $agencyUsers = $db->fetchAll(
+            "SELECT u.id, u.name, u.email, u.status,
+                    u.agency_name, u.agency_location,
+                    u.firstname, u.lastname
+             FROM users u
+             WHERE u.role = 'agency' AND u.status = 'approved'
+             ORDER BY COALESCE(NULLIF(u.agency_name,''), u.name) ASC"
+        );
+
+        // Mark which user IDs are already invited for the selected job fair
+        $alreadyInvitedUserIds = [];
+        if ($requestId) {
+            $rows = $db->fetchAll(
+                "SELECT user_id FROM participating_agencies WHERE job_fair_request_id = ? AND user_id IS NOT NULL",
+                [$requestId]
             );
+            $alreadyInvitedUserIds = array_column($rows, 'user_id');
         }
 
-        // Get confirmed resources from secretary for this job fair
+        // Vacancy count per agency for the right panel
+        $vacancyCountByAgency = [];
+        if ($requestId) {
+            $vcRows = $db->fetchAll(
+                "SELECT pa.id, COUNT(jv.id) AS vcount
+                 FROM participating_agencies pa
+                 LEFT JOIN job_vacancies jv ON jv.participating_agency_id = pa.id AND jv.status = 'open'
+                 WHERE pa.job_fair_request_id = ?
+                 GROUP BY pa.id",
+                [$requestId]
+            );
+            foreach ($vcRows as $row) {
+                $vacancyCountByAgency[$row['id']] = (int)$row['vcount'];
+            }
+        }
+
+        // Confirmed resources from Secretary for this job fair
         $confirmedResources = [];
         if ($requestId) {
             $confirmedResources = $db->fetchAll(
-                "SELECT ra.*, br.name AS resource_name, br.unit
+                "SELECT ra.*, r.name AS resource_name, r.unit
                  FROM resource_allocations ra
-                 JOIN barangay_resources br ON br.id = ra.resource_id
-                 WHERE ra.job_fair_request_id = ?
-                 ORDER BY ra.created_at DESC",
+                 JOIN resources r ON r.id = ra.resource_id
+                 WHERE ra.job_fair_request_id = ? AND ra.status = 'confirmed'
+                 ORDER BY r.name",
                 [$requestId]
             );
         }
 
-        $pageTitle = 'Participating Agencies';
-        $success   = getFlash('success');
+        $pageTitle   = 'Participating Agencies';
+        $success     = getFlash('success');
         include VIEW_PATH . '/supervising_labor/agencies.php';
     }
 
@@ -294,34 +314,34 @@ class SupervisingLaborController
             redirect(APP_URL . '/supervising-labor/agencies?request_id=' . $requestId);
         }
 
-        $request = $this->requestModel->find($requestId);
-        if (!$request) {
-            flash('error', 'Job fair not found.');
-            redirect(APP_URL . '/supervising-labor/agencies');
-        }
+        // Load the job fair details for notification message
+        $fairRequest = $this->requestModel->find($requestId);
+        $fairTitle   = $fairRequest['title'] ?? 'the upcoming job fair';
 
-        $db = Database::getInstance();
+        $db      = Database::getInstance();
         $invited = 0;
         $skipped = 0;
 
         foreach ($userIds as $uid) {
             $uid  = (int)$uid;
             $user = $this->userModel->find($uid);
-            if (!$user) { $skipped++; continue; }
+            if (!$user || $user['role'] !== 'agency') { $skipped++; continue; }
 
             $email = $user['email'] ?? null;
 
-            // Check if already invited to this job fair
+            // Skip if already invited
             $already = $db->fetchColumn(
-                "SELECT COUNT(*) FROM participating_agencies WHERE job_fair_request_id = ? AND user_id = ?",
-                [$requestId, $uid]
+                "SELECT COUNT(*) FROM participating_agencies
+                 WHERE job_fair_request_id = ? AND (user_id = ? OR (email = ? AND email IS NOT NULL))",
+                [$requestId, $uid, $email]
             );
             if ($already) { $skipped++; continue; }
 
-            // Use agency_name from profile if set, fallback to user name
+            // Use the agency's profile name if they've set it up, otherwise fall back to their full name
             $agencyName = !empty($user['agency_name'])
                 ? $user['agency_name']
-                : ($user['name'] ?? ($user['firstname'] . ' ' . $user['lastname']));
+                : ($user['name'] ?? trim(($user['firstname'] ?? '') . ' ' . ($user['lastname'] ?? '')));
+            $agencyLocation = $user['agency_location'] ?? null;
 
             $this->agencyModel->create([
                 'job_fair_request_id' => $requestId,
@@ -330,23 +350,23 @@ class SupervisingLaborController
                 'contact_person'      => $user['name'] ?? null,
                 'email'               => $email,
                 'phone'               => $user['phone'] ?? null,
-                'address'             => $user['agency_location'] ?? null,
+                'address'             => $agencyLocation,
             ]);
 
             // Notify the agency user
             $this->notificationModel->create(
                 $uid,
-                'invitation',
-                'Job Fair Invitation',
-                "You have been invited to participate in \"{$request['title']}\". Please accept or decline on your dashboard.",
+                'info',
+                'Invitation to Job Fair',
+                "You have been invited to participate in '{$fairTitle}'. Please confirm your participation on your dashboard.",
                 APP_URL . '/agency/dashboard'
             );
             $invited++;
         }
 
-        auditLog('bulk_invite', 'agencies', "Invited {$invited} agencies to request ID {$requestId}.");
+        auditLog('bulk_invite', 'agencies', "Bulk invited {$invited} agencies to job fair ID {$requestId}.");
         $msg = "{$invited} agency/agencies invited successfully.";
-        if ($skipped) $msg .= " {$skipped} already invited (skipped).";
+        if ($skipped) $msg .= " {$skipped} skipped (already invited or invalid).";
         flash('success', $msg);
         redirect(APP_URL . '/supervising-labor/agencies?request_id=' . $requestId);
     }
@@ -462,7 +482,6 @@ class SupervisingLaborController
         $vacancies = $this->vacancyModel->findAll();
         $pageTitle = 'Review Vacancies';
         $success   = getFlash('success');
-        $error     = getFlash('error');
         include VIEW_PATH . '/supervising_labor/vacancies_review.php';
     }
 
@@ -488,199 +507,105 @@ class SupervisingLaborController
         redirect(APP_URL . '/supervising-labor/vacancies/review');
     }
 
-    // POST /supervising-labor/vacancies/{id}/accept  — Accept and officially add to job fair
-    public function acceptVacancy(int $id): void
-    {
-        requireRole('supervising_labor');
-        verifyCsrf();
-
-        $vacancy = $this->vacancyModel->find($id);
-        if (!$vacancy) {
-            flash('error', 'Vacancy not found.');
-            redirect(APP_URL . '/supervising-labor/vacancies/review');
-        }
-
-        $remarks = trim($_POST['sl_remarks'] ?? '');
-
-        $this->vacancyModel->update($id, [
-            'sl_status'        => 'accepted',
-            'sl_remarks'       => $remarks ?: null,
-            'sl_processed_by'  => currentUser()['id'],
-            'sl_processed_at'  => date('Y-m-d H:i:s'),
-            'status'           => 'open', // officially open/published
-        ]);
-
-        // Notify the agency user who submitted the vacancy
-        if (!empty($vacancy['submitted_by'])) {
-            $this->notificationModel->create(
-                (int)$vacancy['submitted_by'],
-                'vacancy_accepted',
-                'Your Vacancy Was Accepted',
-                "Supervising Labor accepted your vacancy: \"{$vacancy['position']}\" at {$vacancy['company_name']}. It is now officially listed for the job fair." .
-                ($remarks ? " Remarks: $remarks" : ''),
-                APP_URL . '/agency/vacancies'
-            );
-        }
-
-        auditLog('accept_vacancy', 'vacancies', "Accepted vacancy ID {$id}: {$vacancy['position']} at {$vacancy['company_name']}.");
-        flash('success', "Vacancy \"{$vacancy['position']}\" accepted and added to the job fair.");
-        redirect(APP_URL . '/supervising-labor/vacancies/review');
-    }
-
-    // POST /supervising-labor/vacancies/{id}/reject
-    public function rejectVacancy(int $id): void
-    {
-        requireRole('supervising_labor');
-        verifyCsrf();
-
-        $vacancy = $this->vacancyModel->find($id);
-        if (!$vacancy) {
-            flash('error', 'Vacancy not found.');
-            redirect(APP_URL . '/supervising-labor/vacancies/review');
-        }
-
-        $remarks = trim($_POST['sl_remarks'] ?? '');
-        if (empty($remarks)) {
-            flash('error', 'Please provide a reason for rejection.');
-            redirect(APP_URL . '/supervising-labor/vacancies/review');
-        }
-
-        $this->vacancyModel->update($id, [
-            'sl_status'       => 'rejected',
-            'sl_remarks'      => $remarks,
-            'sl_processed_by' => currentUser()['id'],
-            'sl_processed_at' => date('Y-m-d H:i:s'),
-            'status'          => 'closed',
-        ]);
-
-        // Notify agency
-        if (!empty($vacancy['submitted_by'])) {
-            $this->notificationModel->create(
-                (int)$vacancy['submitted_by'],
-                'vacancy_rejected',
-                'Your Vacancy Was Not Accepted',
-                "Supervising Labor did not accept your vacancy: \"{$vacancy['position']}\" at {$vacancy['company_name']}. Reason: {$remarks}",
-                APP_URL . '/agency/vacancies'
-            );
-        }
-
-        auditLog('reject_vacancy', 'vacancies', "Rejected vacancy ID {$id}: {$vacancy['position']}. Reason: {$remarks}");
-        flash('success', "Vacancy rejected. Agency has been notified.");
-        redirect(APP_URL . '/supervising-labor/vacancies/review');
-    }
-
-    // GET /supervising-labor/registration-forms — list all published job fair posts for SL
-    public function registrationForms(): void
+    // GET /supervising-labor/registration-form/{requestId}
+    public function registrationForm(int $requestId): void
     {
         requireRole('supervising_labor');
 
-        $db    = Database::getInstance();
-        $posts = $db->fetchAll(
-            "SELECT p.*,
-                    jfr.title AS fair_title, jfr.requested_date, jfr.venue AS fair_venue,
-                    COUNT(DISTINCT jfr_reg.applicant_id) AS registered_count
-             FROM job_fair_posts p
-             JOIN job_fair_requests jfr ON jfr.id = p.job_fair_request_id
-             LEFT JOIN job_fair_registrations jfr_reg ON jfr_reg.job_fair_post_id = p.id
-             WHERE p.status = 'published'
-             GROUP BY p.id
-             ORDER BY p.event_date DESC, p.created_at DESC"
-        );
-
-        $pageTitle = 'Job Fair Registration Forms';
-        include VIEW_PATH . '/supervising_labor/registration_forms.php';
-    }
-
-    // GET /supervising-labor/registration-form/{postId}
-    // Now uses job_fair_posts + job_fair_registrations (online registrations by job seekers)
-    public function registrationForm(int $postId): void
-    {
-        requireRole('supervising_labor');
-
-        $db   = Database::getInstance();
-        $post = $db->fetch(
-            "SELECT p.*, jfr.title AS fair_title, jfr.requested_date, jfr.venue AS fair_venue
-             FROM job_fair_posts p
-             JOIN job_fair_requests jfr ON jfr.id = p.job_fair_request_id
-             WHERE p.id = ?",
-            [$postId]
-        );
-
-        if (!$post) {
-            // Fallback: try by job_fair_request_id (legacy)
-            $request = $this->requestModel->find($postId);
-            if (!$request) {
-                flash('error', 'Job fair not found.');
-                redirect(APP_URL . '/supervising-labor/requests');
-            }
-            // Use old applicants logic for legacy
-            $applicants = $this->applicantModel->findAll(['job_fair_request_id' => $postId]);
-            $pageTitle  = 'Registration Form — ' . $request['title'];
-            $post       = $request;
-            $isLegacy   = true;
-            include VIEW_PATH . '/supervising_labor/registration_form.php';
-            return;
-        }
-
-        // Load online registrations for this post
-        $postModel  = new JobFairPostModel();
-        $applicants = $postModel->getRegistrations($postId);
-        $companies  = $postModel->getCompaniesAndVacancies($postId);
-        $regCount   = count($applicants);
-        $pageTitle  = 'Registration Form — ' . $post['title'];
-        $isLegacy   = false;
-
-        include VIEW_PATH . '/supervising_labor/registration_form.php';
-    }
-
-    // POST /supervising-labor/registration-form/{id}/store
-    // SL can manually add a walk-in registrant to the job fair
-    public function storeRegistrationForm(int $postId): void
-    {
-        requireRole('supervising_labor');
-        verifyCsrf();
-
-        $db   = Database::getInstance();
-        $post = $db->fetch("SELECT * FROM job_fair_posts WHERE id = ?", [$postId]);
-        if (!$post) {
-            flash('error', 'Job fair post not found.');
+        $request    = $this->requestModel->find($requestId);
+        if (!$request) {
+            flash('error', 'Job fair request not found.');
             redirect(APP_URL . '/supervising-labor/requests');
         }
 
-        $surname    = trim($_POST['surname'] ?? '');
-        $firstname  = trim($_POST['firstname'] ?? '');
-        $middlename = trim($_POST['middlename'] ?? '');
-        $gsisSssNo  = trim($_POST['gsis_sss_no'] ?? '');
-        $pagIbigNo  = trim($_POST['pag_ibig_no'] ?? '');
-        $philhealthNo = trim($_POST['philhealth_no'] ?? '');
-        $disability = trim($_POST['disability'] ?? '');
+        $applicants = $this->applicantModel->findAll(['job_fair_request_id' => $requestId]);
+        $pageTitle  = 'Registration Form - ' . $request['title'];
+        include VIEW_PATH . '/supervising_labor/registration_form.php';
+    }
+
+    // POST /supervising-labor/registration-form/{requestId}/store
+    public function storeRegistrationForm(int $requestId): void
+    {
+        requireRole('supervising_labor');
+        verifyCsrf();
+
+        $request = $this->requestModel->find($requestId);
+        if (!$request) {
+            flash('error', 'Job fair request not found.');
+            redirect(APP_URL . '/supervising-labor/requests');
+        }
+
+        $surname        = trim($_POST['surname'] ?? '');
+        $firstname      = trim($_POST['firstname'] ?? '');
+        $middlename     = trim($_POST['middlename'] ?? '');
+        $gsis_sss_no    = trim($_POST['gsis_sss_no'] ?? '');
+        $pag_ibig_no    = trim($_POST['pag_ibig_no'] ?? '');
+        $philhealth_no  = trim($_POST['philhealth_no'] ?? '');
+        $disability     = trim($_POST['disability_status'] ?? 'none');
 
         if (empty($surname) || empty($firstname)) {
             flash('error', 'Lastname and Firstname are required.');
-            redirect(APP_URL . '/supervising-labor/registration-form/' . $postId);
+            redirect(APP_URL . '/supervising-labor/registration-form/' . $requestId);
         }
 
-        // Create walk-in applicant (no user account)
         $applicantId = $this->applicantModel->create([
-            'user_id'      => null,
-            'surname'      => $surname,
-            'firstname'    => $firstname,
-            'middlename'   => $middlename ?: null,
-            'gsis_sss_no'  => $gsisSssNo ?: null,
-            'pag_ibig_no'  => $pagIbigNo ?: null,
-            'philhealth_no'=> $philhealthNo ?: null,
-            'disability'   => $disability ?: null,
+            'user_id'         => null,
+            'surname'         => $surname,
+            'firstname'       => $firstname,
+            'middlename'      => $middlename ?: null,
+            'gsis_sss_no'     => $gsis_sss_no ?: null,
+            'pag_ibig_no'     => $pag_ibig_no ?: null,
+            'philhealth_no'   => $philhealth_no ?: null,
+            'disability_status' => $disability ?: 'none',
         ]);
 
-        // Register them for the post
+        // If there is a published job fair post for this request, register the applicant for it
+        $publishedPost = $this->postModel->getPublished();
+        $linkedPostId = null;
+        foreach ($publishedPost as $p) {
+            if ((int)$p['job_fair_request_id'] === (int)$requestId) { $linkedPostId = (int)$p['id']; break; }
+        }
+        if ($linkedPostId) {
+            // Register the applicant to the job_fair_registrations table
+            $this->postModel->register($linkedPostId, (int)$applicantId, 0);
+        }
+
+        auditLog('create_applicant_via_regform', 'applicants', "Created applicant {$surname}, {$firstname} for job fair ID {$requestId}.");
+        flash('success', 'Applicant registered successfully.');
+        redirect(APP_URL . '/supervising-labor/registration-form/' . $requestId);
+    }
+
+    // POST /supervising-labor/registration-form/{id}/generate
+    public function generateRegistrationForm(int $requestId): void
+    {
+        requireRole('supervising_labor');
+        verifyCsrf();
+
+        $request = $this->requestModel->find($requestId);
+        if (!$request) {
+            flash('error', 'Job fair request not found.');
+            redirect(APP_URL . '/supervising-labor/requests');
+        }
+
+        // Create a job_fair_post that acts as the public registration form
+        $title = 'Registration — ' . $request['title'];
+        $db = Database::getInstance();
         $db->execute(
-            "INSERT IGNORE INTO job_fair_registrations (job_fair_post_id, applicant_id, registered_at)
-             VALUES (?, ?, NOW())",
-            [$postId, $applicantId]
+            "INSERT INTO job_fair_posts (job_fair_request_id, title, description, venue, event_date, event_time, status, created_by, published_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'published', ?, NOW(), NOW())",
+            [
+                $requestId,
+                $title,
+                'Public registration form generated by Supervising Labor.',
+                $request['venue'] ?? null,
+                $request['requested_date'] ?? null,
+                $request['requested_time'] ?? null,
+                currentUser()['id'],
+            ]
         );
 
-        auditLog('sl_walkin_registrant', 'applicants', "SL added walk-in: {$surname}, {$firstname} for post ID {$postId}.");
-        flash('success', "Walk-in registrant {$surname}, {$firstname} added.");
-        redirect(APP_URL . '/supervising-labor/registration-form/' . $postId);
+        auditLog('generate_registration_form', 'job_fair_posts', "Generated public registration form for request ID {$requestId}.");
+        flash('success', 'Public registration form generated and published.');
+        redirect(APP_URL . '/supervising-labor/registration-form/' . $requestId);
     }
 }

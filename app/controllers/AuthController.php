@@ -193,6 +193,6 @@ class AuthController
         }
         session_destroy();
 
-        redirect(APP_URL . '/');
+        redirect(APP_URL . '/dashboard');
     }
 }

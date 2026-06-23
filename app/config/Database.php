@@ -30,6 +30,9 @@ class Database
         } catch (PDOException $e) {
             // Don't expose credentials in error messages
             error_log('Database connection failed: ' . $e->getMessage());
+            if (defined('APP_DEBUG') && APP_DEBUG) {
+                die('Database connection failed: ' . $e->getMessage());
+            }
             die('Database connection failed. Please check your configuration.');
         }
     }

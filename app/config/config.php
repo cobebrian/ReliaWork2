@@ -27,6 +27,10 @@ function env(string $key, mixed $default = null): mixed
 define('APP_NAME', env('APP_NAME', 'ReliaWork2'));
 define('APP_URL',  rtrim(env('APP_URL', 'http://localhost/currentsystem/ReliaWork2/public'), '/'));
 
+// Environment and debug
+define('APP_ENV',   env('APP_ENV', 'development'));
+define('APP_DEBUG', env('APP_DEBUG', '1') === '1');
+
 define('BASE_PATH',   dirname(__DIR__, 2));
 define('APP_PATH',    BASE_PATH . '/app');
 define('VIEW_PATH',   APP_PATH  . '/views');

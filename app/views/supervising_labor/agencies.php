@@ -62,34 +62,40 @@
                     <div class="text-center py-4 text-muted small">
                         <i class="bi bi-people d-block mb-1 fs-4"></i>
                         No agency accounts found.<br>
-                        <small>Agencies must register and be approved first.</small>
+                        <small>Agencies must register and be approved first by the admin.</small>
                     </div>
                     <?php else: ?>
                     <?php foreach ($agencyUsers as $u):
-                        // Show company/agency name if profile set up, else user name
-                        $displayName = !empty($u['agency_name']) ? $u['agency_name'] : $u['name'];
-                        $displaySub  = !empty($u['agency_name']) ? ($u['agency_location'] ?? '') : $u['email'];
+                        $displayName  = !empty($u['agency_name']) ? $u['agency_name'] : $u['name'];
+                        $displaySub   = !empty($u['agency_location']) ? $u['agency_location'] : $u['email'];
+                        $alreadyInvited = in_array($u['id'], $alreadyInvitedUserIds ?? []);
                     ?>
-                    <label class="company-item d-flex align-items-center gap-3 px-3 py-2 border-bottom"
-                           style="cursor:pointer;transition:background .15s;"
-                           onmouseover="this.style.background='#f8f9fa'"
-                           onmouseout="this.style.background=''">
-                        <input type="checkbox" class="form-check-input company-cb flex-shrink-0"
-                               value="<?= $u['id'] ?>"
-                               data-name="<?= htmlspecialchars(strtolower($displayName), ENT_QUOTES, 'UTF-8') ?>"
-                               onchange="updateCount()">
+                    <label class="company-item d-flex align-items-center gap-3 px-3 py-2 border-bottom
+                                  <?= $alreadyInvited ? 'opacity-50' : '' ?>"
+                           style="cursor:<?= $alreadyInvited ? 'default' : 'pointer' ?>;transition:background .15s;"
+                           <?= !$alreadyInvited ? 'onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'\'"' : '' ?>>
+                        <?php if ($alreadyInvited): ?>
+                            <i class="bi bi-check-circle-fill text-success flex-shrink-0" title="Already invited"></i>
+                        <?php else: ?>
+                            <input type="checkbox" class="form-check-input company-cb flex-shrink-0"
+                                   value="<?= $u['id'] ?>"
+                                   data-name="<?= htmlspecialchars(strtolower($displayName), ENT_QUOTES, 'UTF-8') ?>"
+                                   onchange="updateCount()">
+                        <?php endif; ?>
                         <div class="flex-grow-1 min-width-0">
                             <div class="fw-semibold small text-truncate">
                                 <?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>
+                                <?php if ($alreadyInvited): ?>
+                                    <span class="badge bg-success ms-1" style="font-size:.65rem;">Invited</span>
+                                <?php endif; ?>
                             </div>
                             <div class="text-muted" style="font-size:.75rem;">
                                 <?= htmlspecialchars($displaySub, ENT_QUOTES, 'UTF-8') ?>
-                                <?php if (!empty($u['agency_name']) && !empty($u['email'])): ?>
-                                &bull; <?= htmlspecialchars($u['email'], ENT_QUOTES, 'UTF-8') ?>
+                                <?php if (!empty($u['agency_location']) && !empty($u['email'])): ?>
+                                    &bull; <span class="text-muted"><?= htmlspecialchars($u['email'], ENT_QUOTES, 'UTF-8') ?></span>
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <i class="bi bi-check-circle-fill text-success d-none check-icon"></i>
                     </label>
                     <?php endforeach; ?>
                     <?php endif; ?>
