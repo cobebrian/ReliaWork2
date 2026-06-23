@@ -147,6 +147,7 @@ function roleDashboardUrl(string $role): string
         'applicant'           => APP_URL . '/applicant/dashboard',
         'techvoc_supervisor'  => APP_URL . '/techvoc/dashboard',
         'bedo'                => APP_URL . '/bedo/dashboard',
+        'validating_officer'  => APP_URL . '/validating-officer/dashboard',
     ];
     return $map[$role] ?? APP_URL . '/login';
 }

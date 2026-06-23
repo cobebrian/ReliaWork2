@@ -35,6 +35,7 @@ define('BASE_PATH',   dirname(__DIR__, 2));
 define('APP_PATH',    BASE_PATH . '/app');
 define('VIEW_PATH',   APP_PATH  . '/views');
 define('PUBLIC_PATH', BASE_PATH . '/public');
+define('UPLOAD_PATH', PUBLIC_PATH . '/uploads');
 
 define('DB_HOST',     env('DB_HOST',     '127.0.0.1'));
 define('DB_PORT',     env('DB_PORT',     '3306'));
@@ -55,16 +56,18 @@ define('ROLES', [
     'applicant',
     'techvoc_supervisor',
     'bedo',
+    'validating_officer',
 ]);
 
 // ── Role Labels ───────────────────────────────────────────────────────────────
 define('ROLE_LABELS', [
-    'admin'              => 'Administrator',
-    'supervising_labor'  => 'Supervising Labor',
-    'barangay_captain'   => 'Barangay Captain',
-    'secretary'          => 'Secretary',
-    'agency'             => 'Agency',
-    'applicant'          => 'Applicant',
-    'techvoc_supervisor' => 'TECH-VOC Supervisor',
-    'bedo'               => 'BEDO Officer',
+    'admin'               => 'Administrator',
+    'supervising_labor'   => 'Supervising Labor',
+    'barangay_captain'    => 'Barangay Captain',
+    'secretary'           => 'Secretary',
+    'agency'              => 'Agency',
+    'applicant'           => 'Applicant',
+    'techvoc_supervisor'  => 'TECH-VOC Supervisor',
+    'bedo'                => 'BEDO Officer',
+    'validating_officer'  => 'Validating Officer',
 ]);

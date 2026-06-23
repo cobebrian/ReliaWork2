@@ -8,6 +8,18 @@
             <div class="card-body">
                 <p class="text-muted mb-4">Please fill in your personal information to complete your applicant profile.</p>
 
+                <!-- NSRP Download Banner -->
+                <div class="alert alert-info d-flex align-items-center gap-3 mb-4">
+                    <i class="bi bi-file-earmark-pdf fs-4 text-danger flex-shrink-0"></i>
+                    <div class="flex-grow-1">
+                        <strong>Need a hard copy?</strong> Download the official DOLE NSRP Form 1 to fill out manually.
+                    </div>
+                    <a href="<?= APP_URL ?>/applicant/nsrp-form-download" target="_blank"
+                       class="btn btn-outline-danger btn-sm flex-shrink-0">
+                        <i class="bi bi-download me-1"></i>Download NSRP Form
+                    </a>
+                </div>
+
                 <form method="POST" action="<?= APP_URL ?>/applicant/register/store">
                     <?= csrfField() ?>
 

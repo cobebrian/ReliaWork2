@@ -48,6 +48,8 @@ require_once APP_PATH . '/controllers/AgencyController.php';
 require_once APP_PATH . '/controllers/ApplicantController.php';
 require_once APP_PATH . '/controllers/TechVocController.php';
 require_once APP_PATH . '/controllers/NotificationController.php';
+require_once APP_PATH . '/controllers/ValidatingOfficerController.php';
+require_once APP_PATH . '/controllers/InterviewController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -180,6 +182,29 @@ $routes = [
     ['GET',  '/bedo/posts',                         'BedoController',             'posts'],
     ['POST', '/bedo/posts/{id}/publish',            'BedoController',             'publish'],
     ['POST', '/bedo/posts/{id}/delete',             'BedoController',             'deletePost'],
+
+    // ── Validating Officer ────────────────────────────────────────────────────
+    ['GET',  '/validating-officer/dashboard',                      'ValidatingOfficerController', 'dashboard'],
+    ['GET',  '/validating-officer/applicants',                     'ValidatingOfficerController', 'applicants'],
+    ['GET',  '/validating-officer/applicants/{id}/review',         'ValidatingOfficerController', 'review'],
+    ['POST', '/validating-officer/applicants/{id}/validate',       'ValidatingOfficerController', 'validate'],
+
+    // ── Applicant Requirements & Interviews ───────────────────────────────────
+    ['GET',  '/applicant/requirements',                            'ApplicantController',         'requirements'],
+    ['POST', '/applicant/requirements/upload',                     'ApplicantController',         'uploadDocument'],
+    ['POST', '/applicant/requirements/submit',                     'ApplicantController',         'submitRequirements'],
+    ['POST', '/applicant/requirements/{id}/delete',                'ApplicantController',         'deleteDocument'],
+    ['GET',  '/applicant/nsrp-form-download',                      'ApplicantController',         'nsrpFormDownload'],
+    ['GET',  '/applicant/interviews',                              'InterviewController',          'applicantInterviews'],
+
+    // ── Agency Interviews ─────────────────────────────────────────────────────
+    ['GET',  '/agency/interviews',                                 'InterviewController',          'index'],
+    ['POST', '/agency/interviews/create',                          'InterviewController',          'create'],
+    ['GET',  '/agency/interviews/{id}/evaluate',                   'InterviewController',          'evaluate'],
+    ['POST', '/agency/interviews/{id}/add-question',               'InterviewController',          'addQuestion'],
+    ['POST', '/agency/interviews/{id}/save-evaluations',           'InterviewController',          'saveEvaluations'],
+    ['POST', '/agency/interviews/{id}/complete',                   'InterviewController',          'complete'],
+    ['POST', '/agency/interviews/questions/{id}/delete',           'InterviewController',          'deleteQuestion'],
 
     // ── TECH-VOC Supervisor ───────────────────────────────────────────────────
     ['GET',  '/techvoc/dashboard',                  'TechVocController',          'dashboard'],

@@ -90,8 +90,8 @@ class ApplicantController
         $this->applicantModel->create($data);
 
         auditLog('register_applicant', 'applicants', "User ID {$userId} completed applicant registration.");
-        flash('success', 'Profile registered! You can now register for job fairs.');
-        redirect(APP_URL . '/applicant/dashboard');
+        flash('success', 'Profile registered! Please upload your requirements to proceed.');
+        redirect(APP_URL . '/applicant/requirements');
     }
 
     // ── Job Fair Listing ──────────────────────────────────────────────────────
@@ -318,6 +318,201 @@ class ApplicantController
 
         $pageTitle = 'My Applications';
         include VIEW_PATH . '/applicant/my_applications.php';
+    }
+
+    // GET /applicant/nsrp-form-download — blank NSRP form for printing
+    public function nsrpFormDownload(): void
+    {
+        requireRole('applicant');
+        $pageTitle = 'NSRP Form 1 — Blank';
+        include VIEW_PATH . '/applicant/nsrp_blank_form.php';
+    }
+
+    // ── Complying Requirements ────────────────────────────────────────────────
+
+    public function requirements(): void
+    {
+        requireRole('applicant');
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+
+        if (!$applicant) {
+            flash('info', 'Please complete your profile first.');
+            redirect(APP_URL . '/applicant/register');
+        }
+
+        $db        = Database::getInstance();
+        $documents = $db->fetchAll(
+            "SELECT * FROM applicant_documents WHERE applicant_id = ? ORDER BY doc_type, uploaded_at",
+            [$applicant['id']]
+        );
+
+        $success = getFlash('success');
+        $error   = getFlash('error');
+        $pageTitle = 'Complying Requirements';
+        include VIEW_PATH . '/applicant/requirements.php';
+    }
+
+    public function uploadDocument(): void
+    {
+        requireRole('applicant');
+        verifyCsrf();
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) {
+            flash('error', 'Profile not found.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $docType  = $_POST['doc_type'] ?? 'other';
+        $allowed  = ['resume', 'cv', 'diploma', 'certificate', 'other'];
+        if (!in_array($docType, $allowed)) $docType = 'other';
+
+        if (empty($_FILES['document']['name'])) {
+            flash('error', 'Please select a file to upload.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $file     = $_FILES['document'];
+        $origName = basename($file['name']);
+        $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        $allowedExt = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+
+        if (!in_array($ext, $allowedExt)) {
+            flash('error', 'Only PDF, Word, or image files are allowed.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+        if ($file['size'] > 5 * 1024 * 1024) {
+            flash('error', 'File size must not exceed 5MB.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $storedName = $docType . '_' . $applicant['id'] . '_' . time() . '.' . $ext;
+        $uploadDir  = PUBLIC_PATH . '/uploads/documents/';
+        $filePath   = $uploadDir . $storedName;
+
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+        if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+            flash('error', 'File upload failed. Please try again.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $db = Database::getInstance();
+        $db->execute(
+            "INSERT INTO applicant_documents
+             (applicant_id, doc_type, original_name, stored_name, file_path, file_size, mime_type, uploaded_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
+            [
+                $applicant['id'],
+                $docType,
+                $origName,
+                $storedName,
+                '/uploads/documents/' . $storedName,
+                $file['size'],
+                $file['type'],
+            ]
+        );
+
+        // Mark as pending_validation when any document is uploaded
+        if ($applicant['validation_status'] === 'not_submitted' || $applicant['validation_status'] === 'resubmit') {
+            $this->applicantModel->update($applicant['id'], ['validation_status' => 'pending']);
+
+            // Notify all validating officers
+            $officers = $db->fetchAll(
+                "SELECT id FROM users WHERE role = 'validating_officer' AND status = 'approved'"
+            );
+            $nm   = new NotificationModel();
+            $name = strtoupper($applicant['surname']) . ', ' . $applicant['firstname'];
+            foreach ($officers as $o) {
+                $nm->create(
+                    (int)$o['id'],
+                    'new_submission',
+                    'New Document Submission',
+                    "Applicant {$name} has submitted documents for validation.",
+                    APP_URL . '/validating-officer/applicants/' . $applicant['id'] . '/review'
+                );
+            }
+        }
+
+        auditLog('upload_document', 'applicant_documents', "Applicant {$applicant['id']} uploaded {$docType}: {$origName}");
+        flash('success', ucfirst($docType) . ' uploaded successfully.');
+        redirect(APP_URL . '/applicant/requirements');
+    }
+
+    public function deleteDocument(int $docId): void
+    {
+        requireRole('applicant');
+        verifyCsrf();
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) {
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $db  = Database::getInstance();
+        $doc = $db->fetch(
+            "SELECT * FROM applicant_documents WHERE id = ? AND applicant_id = ?",
+            [$docId, $applicant['id']]
+        );
+        if (!$doc) {
+            flash('error', 'Document not found.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        // Delete file
+        $fullPath = PUBLIC_PATH . $doc['file_path'];
+        if (file_exists($fullPath)) @unlink($fullPath);
+
+        $db->execute("DELETE FROM applicant_documents WHERE id = ?", [$docId]);
+        flash('success', 'Document removed.');
+        redirect(APP_URL . '/applicant/requirements');
+    }
+
+    public function submitRequirements(): void
+    {
+        requireRole('applicant');
+        verifyCsrf();
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) {
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $db        = Database::getInstance();
+        $docCount  = (int)$db->fetchColumn(
+            "SELECT COUNT(*) FROM applicant_documents WHERE applicant_id = ?",
+            [$applicant['id']]
+        );
+
+        if ($docCount === 0) {
+            flash('error', 'Please upload at least one document before submitting.');
+            redirect(APP_URL . '/applicant/requirements');
+        }
+
+        $this->applicantModel->update($applicant['id'], ['validation_status' => 'pending']);
+
+        // Notify validating officers
+        $officers = $db->fetchAll("SELECT id FROM users WHERE role = 'validating_officer' AND status = 'approved'");
+        $nm   = new NotificationModel();
+        $name = strtoupper($applicant['surname']) . ', ' . $applicant['firstname'];
+        foreach ($officers as $o) {
+            $nm->create(
+                (int)$o['id'],
+                'new_submission',
+                'Requirements Submitted for Review',
+                "Applicant {$name} has submitted their requirements for validation.",
+                APP_URL . '/validating-officer/applicants/' . $applicant['id'] . '/review'
+            );
+        }
+
+        auditLog('submit_requirements', 'applicants', "Applicant {$applicant['id']} submitted requirements for validation.");
+        flash('success', 'Requirements submitted! A Validating Officer will review your documents shortly.');
+        redirect(APP_URL . '/applicant/requirements');
     }
 
     // ── Private helper: extract all NSRP fields from POST ────────────────────
