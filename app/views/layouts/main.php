@@ -71,6 +71,14 @@ switch ($role) {
             ['url' => APP_URL . '/validating-officer/applicants?status=approved', 'icon' => 'bi-check-circle',    'label' => 'Approved'],
         ];
         break;
+    case 'reporting_officer':
+        $navLinks = [
+            ['url' => APP_URL . '/reporting-officer/dashboard',  'icon' => 'bi-speedometer2',        'label' => 'Dashboard'],
+            ['url' => APP_URL . '/reporting-officer/interviews',  'icon' => 'bi-camera-video',        'label' => 'All Interviews'],
+            ['url' => APP_URL . '/reporting-officer/interviews?outcome=hired',     'icon' => 'bi-person-check', 'label' => 'Hired'],
+            ['url' => APP_URL . '/reporting-officer/interviews?outcome=not_hired', 'icon' => 'bi-person-x',     'label' => 'Not Hired'],
+        ];
+        break;
     case 'techvoc_supervisor':
         $navLinks = [
             ['url' => APP_URL . '/techvoc/dashboard',                'icon' => 'bi-speedometer2',    'label' => 'Dashboard'],

@@ -231,30 +231,86 @@ class InterviewController
         requireRole('agency');
         verifyCsrf();
 
-        $userId = (int)currentUser()['id'];
+        $userId    = (int)currentUser()['id'];
         $interview = $this->verifyInterviewOwner($id, $userId);
 
         $overallRemarks = trim($_POST['overall_remarks'] ?? '');
+        $hiringOutcome  = $_POST['hiring_outcome'] ?? 'pending';
+        $hiringRemarks  = trim($_POST['hiring_remarks'] ?? '');
 
-        $this->db->execute(
-            "UPDATE interviews SET status = 'completed', overall_remarks = ?, completed_at = NOW() WHERE id = ?",
-            [$overallRemarks ?: null, $id]
-        );
+        $validOutcomes = ['pending', 'hired', 'not_hired', 'for_consideration'];
+        if (!in_array($hiringOutcome, $validOutcomes)) $hiringOutcome = 'pending';
+
+        $pdo = $this->db->getPdo();
+        $pdo->beginTransaction();
+        try {
+            $this->db->execute(
+                "UPDATE interviews
+                 SET status = 'completed', overall_remarks = ?,
+                     hiring_outcome = ?, hiring_remarks = ?, completed_at = NOW()
+                 WHERE id = ?",
+                [$overallRemarks ?: null, $hiringOutcome, $hiringRemarks ?: null, $id]
+            );
+
+            // Get full interview data for reporting
+            $fullInterview = $this->db->fetch(
+                "SELECT iv.*, pa.job_fair_request_id, pa.agency_name,
+                        jfr.title AS fair_title, a.user_id AS applicant_user_id,
+                        a.surname, a.firstname
+                 FROM interviews iv
+                 JOIN participating_agencies pa ON pa.id = iv.agency_id
+                 JOIN job_fair_requests jfr ON jfr.id = pa.job_fair_request_id
+                 JOIN applicants a ON a.id = iv.applicant_id
+                 WHERE iv.id = ?",
+                [$id]
+            );
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            flash('error', 'Failed to complete interview. Please try again.');
+            redirect(APP_URL . '/agency/interviews/' . $id . '/evaluate');
+        }
 
         // Notify applicant
         $applicant = $this->db->fetch("SELECT * FROM applicants WHERE id = ?", [$interview['applicant_id']]);
         if ($applicant && $applicant['user_id']) {
+            $outcomeMsg = match($hiringOutcome) {
+                'hired'            => 'Congratulations! You have been marked as HIRED.',
+                'not_hired'        => 'Your interview has been completed. Unfortunately you were not selected at this time.',
+                'for_consideration'=> 'Your interview is complete. You are being considered for the position.',
+                default            => 'Your interview has been completed.',
+            };
             $this->notifModel->create(
                 (int)$applicant['user_id'],
                 'interview_completed',
-                'Interview Completed',
-                "Your interview with {$interview['agency_name']} has been completed. You will be notified about the hiring decision.",
+                'Interview Completed — ' . ucfirst(str_replace('_', ' ', $hiringOutcome)),
+                $outcomeMsg . ($overallRemarks ? " Remarks: {$overallRemarks}" : ''),
                 APP_URL . '/applicant/interviews'
             );
         }
 
-        auditLog('complete_interview', 'interviews', "Interview {$id} marked complete by agency user {$userId}.");
-        flash('success', 'Interview marked as completed. Applicant has been notified.');
+        // Notify all Reporting Officers
+        if (!empty($fullInterview)) {
+            $reporters = $this->db->fetchAll(
+                "SELECT id FROM users WHERE role = 'reporting_officer' AND status = 'approved'"
+            );
+            $name = strtoupper($interview['surname'] ?? '') . ', ' . ($interview['firstname'] ?? '');
+            foreach ($reporters as $r) {
+                $this->notifModel->create(
+                    (int)$r['id'],
+                    'interview_report',
+                    'Interview Completed — ' . ($fullInterview['fair_title'] ?? ''),
+                    "Agency \"{$interview['agency_name']}\" completed interview with applicant {$name}. Outcome: " .
+                    ucfirst(str_replace('_', ' ', $hiringOutcome)) . ".",
+                    APP_URL . '/reporting-officer/dashboard'
+                );
+            }
+        }
+
+        auditLog('complete_interview', 'interviews',
+            "Interview {$id} marked complete. Outcome: {$hiringOutcome}. Agency user {$userId}.");
+        flash('success', 'Interview marked as completed. Applicant and Reporting Officers have been notified.');
         redirect(APP_URL . '/agency/interviews/' . $id . '/evaluate');
     }
 

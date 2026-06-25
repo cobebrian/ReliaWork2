@@ -50,6 +50,7 @@ require_once APP_PATH . '/controllers/TechVocController.php';
 require_once APP_PATH . '/controllers/NotificationController.php';
 require_once APP_PATH . '/controllers/ValidatingOfficerController.php';
 require_once APP_PATH . '/controllers/InterviewController.php';
+require_once APP_PATH . '/controllers/ReportingOfficerController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -205,6 +206,14 @@ $routes = [
     ['POST', '/agency/interviews/{id}/save-evaluations',           'InterviewController',          'saveEvaluations'],
     ['POST', '/agency/interviews/{id}/complete',                   'InterviewController',          'complete'],
     ['POST', '/agency/interviews/questions/{id}/delete',           'InterviewController',          'deleteQuestion'],
+
+    // ── Reporting Officer ─────────────────────────────────────────────────────
+    ['GET',  '/reporting-officer/dashboard',                    'ReportingOfficerController', 'dashboard'],
+    ['GET',  '/reporting-officer/interviews',                   'ReportingOfficerController', 'interviews'],
+    ['GET',  '/reporting-officer/interview/{id}',               'ReportingOfficerController', 'interviewDetail'],
+    ['POST', '/reporting-officer/interview/{id}/update-outcome','ReportingOfficerController', 'updateOutcome'],
+    ['GET',  '/reporting-officer/job-fairs/{id}',               'ReportingOfficerController', 'jobFairReport'],
+    ['POST', '/reporting-officer/generate-report/{id}',         'ReportingOfficerController', 'generateReport'],
 
     // ── TECH-VOC Supervisor ───────────────────────────────────────────────────
     ['GET',  '/techvoc/dashboard',                  'TechVocController',          'dashboard'],

@@ -179,8 +179,26 @@
                 <h6 class="fw-bold mb-2"><i class="bi bi-flag-fill text-success me-2"></i>Complete Interview</h6>
                 <form method="POST" action="<?= APP_URL ?>/agency/interviews/<?= $interview['id'] ?>/complete">
                     <?= csrfField() ?>
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">
+                                Hiring Decision <span class="text-danger">*</span>
+                            </label>
+                            <select name="hiring_outcome" class="form-select form-select-sm" required>
+                                <option value="pending">— Select Outcome —</option>
+                                <option value="hired">✓ Hired</option>
+                                <option value="not_hired">✗ Not Hired</option>
+                                <option value="for_consideration">⏳ For Consideration</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Hiring Remarks (optional)</label>
+                            <input type="text" name="hiring_remarks" class="form-control form-control-sm"
+                                   placeholder="e.g. Qualified for position...">
+                        </div>
+                    </div>
                     <div class="mb-2">
-                        <label class="form-label small fw-semibold">Overall Remarks (optional)</label>
+                        <label class="form-label small fw-semibold">Overall Interview Remarks (optional)</label>
                         <textarea name="overall_remarks" class="form-control form-control-sm" rows="2"
                                   placeholder="Overall assessment of the applicant..."><?= htmlspecialchars($interview['overall_remarks'] ?? '', ENT_QUOTES) ?></textarea>
                     </div>
@@ -197,6 +215,13 @@
             <div>
                 <strong>Interview Completed</strong>
                 <?= !empty($interview['completed_at']) ? ' on ' . date('F d, Y', strtotime($interview['completed_at'])) : '' ?>
+                <?php
+                $oColors = ['hired'=>'success','not_hired'=>'danger','for_consideration'=>'info','pending'=>'warning'];
+                $oColor  = $oColors[$interview['hiring_outcome']] ?? 'secondary';
+                ?>
+                <span class="badge bg-<?= $oColor ?> ms-2">
+                    <?= ucfirst(str_replace('_', ' ', $interview['hiring_outcome'])) ?>
+                </span>
                 <?php if (!empty($interview['overall_remarks'])): ?>
                 <div class="small mt-1">Overall Remarks: <em>"<?= htmlspecialchars($interview['overall_remarks'], ENT_QUOTES) ?>"</em></div>
                 <?php endif; ?>

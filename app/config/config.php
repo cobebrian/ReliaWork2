@@ -57,6 +57,7 @@ define('ROLES', [
     'techvoc_supervisor',
     'bedo',
     'validating_officer',
+    'reporting_officer',
 ]);
 
 // ── Role Labels ───────────────────────────────────────────────────────────────
@@ -70,4 +71,5 @@ define('ROLE_LABELS', [
     'techvoc_supervisor'  => 'TECH-VOC Supervisor',
     'bedo'                => 'BEDO Officer',
     'validating_officer'  => 'Validating Officer',
+    'reporting_officer'   => 'Reporting Officer',
 ]);
