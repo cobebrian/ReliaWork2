@@ -15,14 +15,13 @@ class InterviewController
         $this->notifModel = new NotificationModel();
     }
 
-    // GET /agency/interviews — list validated applicants available for interview
+    // GET /agency/interviews — list approved applications + existing interviews
     public function index(): void
     {
         requireRole('agency');
 
         $userId = (int)currentUser()['id'];
 
-        // Get agency's confirmed participating_agencies records
         $myAgencies = $this->db->fetchAll(
             "SELECT pa.id, pa.agency_name, jfr.title AS fair_title, jfr.requested_date
              FROM participating_agencies pa
@@ -32,31 +31,45 @@ class InterviewController
         );
         $agencyIds = array_column($myAgencies, 'id');
 
-        // Validated applicants
-        $validatedApplicants = $this->db->fetchAll(
-            "SELECT a.*, u.email,
-                    (SELECT COUNT(*) FROM interviews iv WHERE iv.applicant_id = a.id AND iv.agency_id IN (" .
-            (empty($agencyIds) ? '0' : implode(',', array_map('intval', $agencyIds))) .
-            ")) AS has_interview
-             FROM applicants a
-             LEFT JOIN users u ON u.id = a.user_id
-             WHERE a.validation_status = 'approved'
-             ORDER BY a.surname, a.firstname"
-        );
+        // Applications approved for interview (validation_status = 'approved')
+        $readyApplicants = [];
+        if (!empty($agencyIds)) {
+            $ph = implode(',', array_fill(0, count($agencyIds), '?'));
+            $readyApplicants = $this->db->fetchAll(
+                "SELECT app.id AS application_id, app.validation_status, app.applied_at,
+                        a.id AS applicant_id, a.surname, a.firstname, a.middlename,
+                        a.preferred_occupation, a.educational_bg, a.work_experience,
+                        u.email,
+                        jv.position, jv.id AS vacancy_id, pa.agency_name, pa.id AS agency_id,
+                        jfr.title AS fair_title,
+                        (SELECT COUNT(*) FROM interviews iv2
+                         WHERE iv2.application_id = app.id) AS has_interview
+                 FROM applications app
+                 JOIN applicants a ON a.id = app.applicant_id
+                 LEFT JOIN users u ON u.id = a.user_id
+                 JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+                 JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+                 LEFT JOIN job_fair_requests jfr ON jfr.id = pa.job_fair_request_id
+                 WHERE app.validation_status = 'approved' AND pa.id IN ($ph)
+                 ORDER BY a.surname, a.firstname",
+                $agencyIds
+            );
+        }
 
-        // My interviews
+        // Existing interviews for this agency
         $myInterviews = [];
         if (!empty($agencyIds)) {
             $ph = implode(',', array_fill(0, count($agencyIds), '?'));
             $myInterviews = $this->db->fetchAll(
                 "SELECT iv.*, a.surname, a.firstname, a.middlename,
-                         pa.agency_name, jfr.title AS fair_title,
+                         jv.position, pa.agency_name, jfr.title AS fair_title,
                          COUNT(iq.id) AS question_count,
-                         SUM(CASE WHEN iq.answer_status IS NOT NULL THEN 1 ELSE 0 END) AS answered_count
+                         SUM(CASE WHEN iq.answer_status IS NOT NULL THEN 1 ELSE 0 END) AS evaluated_count
                  FROM interviews iv
                  JOIN applicants a ON a.id = iv.applicant_id
                  JOIN participating_agencies pa ON pa.id = iv.agency_id
                  JOIN job_fair_requests jfr ON jfr.id = pa.job_fair_request_id
+                 LEFT JOIN job_vacancies jv ON jv.id = iv.job_vacancy_id
                  LEFT JOIN interview_questions iq ON iq.interview_id = iv.id
                  WHERE iv.agency_id IN ($ph)
                  GROUP BY iv.id
@@ -77,10 +90,10 @@ class InterviewController
         requireRole('agency');
         verifyCsrf();
 
-        $applicantId  = (int)($_POST['applicant_id'] ?? 0);
-        $agencyId     = (int)($_POST['agency_id'] ?? 0);
-        $vacancyId    = (int)($_POST['job_vacancy_id'] ?? 0) ?: null;
-        $scheduledAt  = trim($_POST['scheduled_at'] ?? '') ?: null;
+        $applicationId = (int)($_POST['application_id'] ?? 0);
+        $agencyId      = (int)($_POST['agency_id'] ?? 0);
+        $vacancyId     = (int)($_POST['job_vacancy_id'] ?? 0) ?: null;
+        $scheduledAt   = trim($_POST['scheduled_at'] ?? '') ?: null;
 
         $userId = (int)currentUser()['id'];
 
@@ -94,28 +107,71 @@ class InterviewController
             redirect(APP_URL . '/agency/interviews');
         }
 
-        // Verify applicant is validated
-        $applicant = $this->db->fetch(
-            "SELECT * FROM applicants WHERE id = ? AND validation_status = 'approved'",
-            [$applicantId]
+        // Verify application is approved
+        $application = $this->db->fetch(
+            "SELECT app.*, a.user_id AS applicant_user_id, a.surname, a.firstname
+             FROM applications app
+             JOIN applicants a ON a.id = app.applicant_id
+             WHERE app.id = ? AND app.validation_status = 'approved'",
+            [$applicationId]
         );
-        if (!$applicant) {
-            flash('error', 'Applicant is not validated.');
+        if (!$application) {
+            flash('error', 'Application is not approved for interview.');
             redirect(APP_URL . '/agency/interviews');
         }
 
-        // Create interview
-        $this->db->execute(
-            "INSERT INTO interviews (applicant_id, agency_id, job_vacancy_id, scheduled_at, status, created_at)
-             VALUES (?, ?, ?, ?, 'scheduled', NOW())",
-            [$applicantId, $agencyId, $vacancyId, $scheduledAt]
+        // Prevent duplicate interview for same application
+        $existing = $this->db->fetchColumn(
+            "SELECT id FROM interviews WHERE application_id = ? AND agency_id = ?",
+            [$applicationId, $agencyId]
         );
-        $interviewId = (int)$this->db->lastInsertId();
+        if ($existing) {
+            flash('info', 'Interview already exists for this application.');
+            redirect(APP_URL . '/agency/interviews/' . $existing . '/evaluate');
+        }
+
+        $pdo = $this->db->getPdo();
+        $pdo->beginTransaction();
+        try {
+            // Create interview
+            $this->db->execute(
+                "INSERT INTO interviews
+                 (applicant_id, agency_id, application_id, job_vacancy_id, scheduled_at, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, 'scheduled', NOW())",
+                [$application['applicant_id'], $agencyId, $applicationId, $vacancyId, $scheduledAt]
+            );
+            $interviewId = (int)$this->db->lastInsertId();
+
+            // Link interview back to application
+            $this->db->execute(
+                "UPDATE applications SET interview_id = ?, updated_at = NOW() WHERE id = ?",
+                [$interviewId, $applicationId]
+            );
+
+            // Auto-load all default questions
+            $templates = $this->db->fetchAll(
+                "SELECT * FROM interview_question_templates WHERE is_active = 1 ORDER BY sort_order"
+            );
+            foreach ($templates as $tpl) {
+                $this->db->execute(
+                    "INSERT INTO interview_questions
+                     (interview_id, question_text, sort_order, is_default, created_at)
+                     VALUES (?, ?, ?, 1, NOW())",
+                    [$interviewId, $tpl['question'], $tpl['sort_order']]
+                );
+            }
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            flash('error', 'Could not create interview. Please try again.');
+            redirect(APP_URL . '/agency/interviews');
+        }
 
         // Notify applicant
-        if ($applicant['user_id']) {
+        if ($application['applicant_user_id']) {
             $this->notifModel->create(
-                (int)$applicant['user_id'],
+                (int)$application['applicant_user_id'],
                 'interview_scheduled',
                 'Interview Scheduled',
                 "An interview has been scheduled with {$agency['agency_name']}." .
@@ -124,8 +180,9 @@ class InterviewController
             );
         }
 
-        auditLog('create_interview', 'interviews', "Agency {$agencyId} created interview for applicant {$applicantId}.");
-        flash('success', 'Interview created.');
+        auditLog('create_interview', 'interviews',
+            "Agency {$agencyId} created interview for application {$applicationId}.");
+        flash('success', 'Interview created with ' . count($templates) . ' default questions loaded.');
         redirect(APP_URL . '/agency/interviews/' . $interviewId . '/evaluate');
     }
 
@@ -210,14 +267,20 @@ class InterviewController
         $statuses = $_POST['answer_status'] ?? [];
         $remarks  = $_POST['remarks']       ?? [];
 
+        // Score map: excellent=4, good=3, fair=2, poor=1, not_answered=0
+        $scoreMap = ['excellent'=>4, 'good'=>3, 'fair'=>2, 'poor'=>1, 'not_answered'=>0];
+        $validStatuses = array_keys($scoreMap);
+
         foreach ($statuses as $qid => $status) {
             $qid    = (int)$qid;
             $remark = trim($remarks[$qid] ?? '');
-            $validStatuses = ['answered', 'needs_improvement', 'not_answered'];
             $status = in_array($status, $validStatuses) ? $status : null;
+            $score  = isset($scoreMap[$status]) ? $scoreMap[$status] : null;
             $this->db->execute(
-                "UPDATE interview_questions SET answer_status = ?, remarks = ? WHERE id = ? AND interview_id = ?",
-                [$status, $remark ?: null, $qid, $id]
+                "UPDATE interview_questions
+                 SET answer_status = ?, remarks = ?, score = ?
+                 WHERE id = ? AND interview_id = ?",
+                [$status, $remark ?: null, $score, $qid, $id]
             );
         }
 
@@ -252,7 +315,38 @@ class InterviewController
                 [$overallRemarks ?: null, $hiringOutcome, $hiringRemarks ?: null, $id]
             );
 
-            // Get full interview data for reporting
+            // Compute score summary from evaluated questions
+            $questions = $this->db->fetchAll(
+                "SELECT answer_status, score, question_text FROM interview_questions WHERE interview_id = ?",
+                [$id]
+            );
+            $totalScore = array_sum(array_column($questions, 'score'));
+            $maxScore   = count($questions) * 4;
+            $pct        = $maxScore > 0 ? round(($totalScore / $maxScore) * 100, 1) : 0;
+            $scoreSummary = "Total: {$totalScore}/{$maxScore} ({$pct}%). Decision: "
+                . ucfirst(str_replace('_', ' ', $hiringOutcome));
+
+            $this->db->execute(
+                "UPDATE interviews SET score_summary = ? WHERE id = ?",
+                [$scoreSummary, $id]
+            );
+
+            // Update linked application status
+            $appRow = $this->db->fetch(
+                "SELECT id FROM applications WHERE interview_id = ?", [$id]
+            );
+            if ($appRow) {
+                $appStatus = match($hiringOutcome) {
+                    'hired'     => 'hired',
+                    'not_hired' => 'rejected',
+                    default     => 'shortlisted',
+                };
+                $this->db->execute(
+                    "UPDATE applications SET status = ?, updated_at = NOW() WHERE id = ?",
+                    [$appStatus, $appRow['id']]
+                );
+            }
+
             $fullInterview = $this->db->fetch(
                 "SELECT iv.*, pa.job_fair_request_id, pa.agency_name,
                         jfr.title AS fair_title, a.user_id AS applicant_user_id,

@@ -191,8 +191,8 @@ class ApplicantController
         auditLog('register_job_fair', 'job_fair_registrations',
             "Applicant ID {$applicantId} registered for job fair post ID {$postId}.");
 
-        flash('success', 'Registration successful! You can now download your registration form.');
-        redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/confirmation');
+        flash('success', 'Registration successful! Now select a company to apply to.');
+        redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/companies');
     }
 
     // ── Registration Confirmation / Download PDF ──────────────────────────────
@@ -218,6 +218,255 @@ class ApplicantController
         $companies = $this->postModel->getCompaniesAndVacancies($postId);
         $pageTitle = 'Registration Confirmation';
         include VIEW_PATH . '/applicant/registration_confirmation.php';
+    }
+
+    // ── Step 2: Select Company ────────────────────────────────────────────────
+
+    public function fairCompanies(int $postId): void
+    {
+        requireRole('applicant');
+
+        $post = $this->postModel->find($postId);
+        if (!$post) {
+            flash('error', 'Job fair not found.');
+            redirect(APP_URL . '/applicant/job-fairs');
+        }
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) {
+            flash('error', 'Please complete your profile first.');
+            redirect(APP_URL . '/applicant/register');
+        }
+
+        // Verify registered
+        if (!$this->postModel->isRegistered($postId, $applicant['id'])) {
+            flash('error', 'Please register for the job fair first.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/register');
+        }
+
+        $data     = $this->postModel->getCompaniesAndVacancies($postId);
+        $companies = $data['companies'] ?? [];
+
+        // Mark which agencies this applicant already applied to in this fair
+        $db = Database::getInstance();
+        $appliedAgencyIds = [];
+        $rows = $db->fetchAll(
+            "SELECT jv.participating_agency_id
+             FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             WHERE app.applicant_id = ? AND app.job_fair_post_id = ?",
+            [$applicant['id'], $postId]
+        );
+        $appliedAgencyIds = array_column($rows, 'participating_agency_id');
+
+        $success  = getFlash('success');
+        $pageTitle = 'Select a Company — ' . $post['title'];
+        include VIEW_PATH . '/applicant/fair_companies.php';
+    }
+
+    // ── Step 3: Select Vacancy ────────────────────────────────────────────────
+
+    public function fairVacancies(int $postId, int $agencyId): void
+    {
+        requireRole('applicant');
+
+        $post = $this->postModel->find($postId);
+        if (!$post) {
+            redirect(APP_URL . '/applicant/job-fairs');
+        }
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant || !$this->postModel->isRegistered($postId, $applicant['id'])) {
+            redirect(APP_URL . '/applicant/job-fairs');
+        }
+
+        $db = Database::getInstance();
+
+        $agency = $db->fetch(
+            "SELECT pa.*, jfr.title AS fair_title
+             FROM participating_agencies pa
+             JOIN job_fair_requests jfr ON jfr.id = pa.job_fair_request_id
+             WHERE pa.id = ?",
+            [$agencyId]
+        );
+        if (!$agency) {
+            flash('error', 'Company not found.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/companies');
+        }
+
+        $vacancies = $db->fetchAll(
+            "SELECT jv.* FROM job_vacancies jv
+             WHERE jv.participating_agency_id = ? AND jv.status = 'open'
+             ORDER BY jv.position",
+            [$agencyId]
+        );
+
+        // Get already-applied vacancy IDs
+        $appliedVacancyIds = array_column(
+            $db->fetchAll(
+                "SELECT job_vacancy_id FROM applications WHERE applicant_id = ?",
+                [$applicant['id']]
+            ),
+            'job_vacancy_id'
+        );
+
+        $pageTitle = 'Choose a Position — ' . $agency['agency_name'];
+        include VIEW_PATH . '/applicant/fair_vacancies.php';
+    }
+
+    // ── Step 4: Apply + Upload Requirements ───────────────────────────────────
+
+    public function showApply(int $postId, int $vacancyId): void
+    {
+        requireRole('applicant');
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant || !$this->postModel->isRegistered($postId, $applicant['id'])) {
+            redirect(APP_URL . '/applicant/job-fairs');
+        }
+
+        $db      = Database::getInstance();
+        $vacancy = $db->fetch(
+            "SELECT jv.*, pa.agency_name, pa.address AS agency_location, pa.id AS agency_id
+             FROM job_vacancies jv
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE jv.id = ? AND jv.status = 'open'",
+            [$vacancyId]
+        );
+        if (!$vacancy) {
+            flash('error', 'Vacancy not found or no longer available.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/companies');
+        }
+
+        $post = $this->postModel->find($postId);
+
+        // Already applied?
+        if ($this->applicationModel->alreadyApplied($applicant['id'], $vacancyId)) {
+            flash('info', 'You have already applied for this position.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/companies');
+        }
+
+        // Existing applicant_documents for pre-fill
+        $existingDocs = $db->fetchAll(
+            "SELECT * FROM applicant_documents WHERE applicant_id = ? ORDER BY doc_type, uploaded_at DESC",
+            [$applicant['id']]
+        );
+
+        $error     = getFlash('error');
+        $pageTitle = 'Apply — ' . $vacancy['position'] . ' at ' . $vacancy['agency_name'];
+        include VIEW_PATH . '/applicant/apply_vacancy.php';
+    }
+
+    public function storeApply(int $postId, int $vacancyId): void
+    {
+        requireRole('applicant');
+        verifyCsrf();
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) {
+            redirect(APP_URL . '/applicant/job-fairs');
+        }
+
+        $db      = Database::getInstance();
+        $vacancy = $db->fetch(
+            "SELECT jv.*, pa.id AS agency_id, pa.job_fair_request_id
+             FROM job_vacancies jv
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE jv.id = ? AND jv.status = 'open'",
+            [$vacancyId]
+        );
+        if (!$vacancy) {
+            flash('error', 'Vacancy is no longer available.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/companies');
+        }
+
+        if ($this->applicationModel->alreadyApplied($applicant['id'], $vacancyId)) {
+            flash('info', 'You have already applied for this position.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/companies');
+        }
+
+        // Validate at least one file
+        $hasFiles = false;
+        foreach (['resume','cv','diploma','certificate','other'] as $type) {
+            if (!empty($_FILES[$type]['name'])) { $hasFiles = true; break; }
+        }
+        if (!$hasFiles) {
+            flash('error', 'Please upload at least your Resume before submitting.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/apply/' . $vacancyId);
+        }
+
+        // Create application record
+        $pdo = $db->getPdo();
+        $pdo->beginTransaction();
+        try {
+            $appId = $this->applicationModel->create([
+                'applicant_id'       => $applicant['id'],
+                'job_vacancy_id'     => $vacancyId,
+                'job_fair_post_id'   => $postId,
+                'job_fair_request_id'=> $vacancy['job_fair_request_id'],
+                'notes'              => trim($_POST['notes'] ?? '') ?: null,
+            ]);
+
+            // Upload documents for this application
+            $uploadDir = PUBLIC_PATH . '/uploads/documents/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+            $allowedExt = ['pdf','doc','docx','jpg','jpeg','png'];
+            foreach (['resume','cv','diploma','certificate','other'] as $type) {
+                if (empty($_FILES[$type]['name'])) continue;
+                $file     = $_FILES[$type];
+                $origName = basename($file['name']);
+                $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+                if (!in_array($ext, $allowedExt)) continue;
+                if ($file['size'] > 5 * 1024 * 1024) continue;
+
+                $storedName = 'app_' . $appId . '_' . $type . '_' . time() . '.' . $ext;
+                $filePath   = $uploadDir . $storedName;
+                if (!move_uploaded_file($file['tmp_name'], $filePath)) continue;
+
+                $db->execute(
+                    "INSERT INTO application_documents
+                     (application_id, applicant_id, doc_type, original_name, stored_name, file_path, file_size, mime_type)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        $appId, $applicant['id'], $type, $origName,
+                        $storedName, '/uploads/documents/' . $storedName,
+                        $file['size'], $file['type'],
+                    ]
+                );
+            }
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            flash('error', 'Submission failed. Please try again.');
+            redirect(APP_URL . '/applicant/job-fairs/' . $postId . '/apply/' . $vacancyId);
+        }
+
+        // Notify validating officers
+        $officers = $db->fetchAll(
+            "SELECT id FROM users WHERE role = 'validating_officer' AND status = 'approved'"
+        );
+        $nm   = new NotificationModel();
+        $name = strtoupper($applicant['surname']) . ', ' . $applicant['firstname'];
+        foreach ($officers as $o) {
+            $nm->create(
+                (int)$o['id'],
+                'new_application',
+                'New Application Submitted',
+                "Applicant {$name} applied for \"{$vacancy['position']}\" at {$vacancy['agency_name']}. Requirements attached.",
+                APP_URL . '/validating-officer/applications/' . $appId . '/review'
+            );
+        }
+
+        auditLog('apply_vacancy', 'applications',
+            "Applicant {$applicant['id']} applied for vacancy {$vacancyId} in post {$postId}. App ID: {$appId}");
+        flash('success', "Application submitted for \"{$vacancy['position']}\"! A Validating Officer will review your documents.");
+        redirect(APP_URL . '/applicant/my-applications');
     }
 
     public function downloadPdf(int $postId): void
@@ -308,7 +557,7 @@ class ApplicantController
     {
         requireRole('applicant');
 
-        $userId    = currentUser()['id'];
+        $userId    = (int)currentUser()['id'];
         $applicant = $this->applicantModel->findByUserId($userId);
 
         $applications = [];
@@ -318,6 +567,121 @@ class ApplicantController
 
         $pageTitle = 'My Applications';
         include VIEW_PATH . '/applicant/my_applications.php';
+    }
+
+    // GET /applicant/my-applications/{id}/resubmit
+    public function resubmitApplication(int $appId): void
+    {
+        requireRole('applicant');
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) { redirect(APP_URL . '/applicant/dashboard'); }
+
+        $db  = Database::getInstance();
+        $app = $db->fetch(
+            "SELECT app.*, jv.position, jv.id AS vacancy_id, jv.participating_agency_id AS agency_id,
+                    pa.agency_name, pa.address AS agency_location,
+                    jv.qualifications, jv.available_slots, jv.mobile_number, jv.gmail_address,
+                    jv.company_location
+             FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE app.id = ? AND app.applicant_id = ?",
+            [$appId, $applicant['id']]
+        );
+        if (!$app || !in_array($app['validation_status'], ['rejected', 'resubmit'])) {
+            flash('error', 'Cannot resubmit this application.');
+            redirect(APP_URL . '/applicant/my-applications');
+        }
+
+        $existingDocs = $this->applicationModel->getDocuments($appId);
+        $vacancy      = $app;
+        $post         = $this->postModel->find((int)$app['job_fair_post_id']);
+        $error        = getFlash('error');
+        $pageTitle    = 'Resubmit Documents — ' . $app['position'];
+        include VIEW_PATH . '/applicant/apply_vacancy.php';
+    }
+
+    // POST /applicant/my-applications/{id}/resubmit
+    public function storeResubmit(int $appId): void
+    {
+        requireRole('applicant');
+        verifyCsrf();
+
+        $userId    = (int)currentUser()['id'];
+        $applicant = $this->applicantModel->findByUserId($userId);
+        if (!$applicant) { redirect(APP_URL . '/applicant/dashboard'); }
+
+        $db  = Database::getInstance();
+        $app = $db->fetch(
+            "SELECT app.*, jv.participating_agency_id, pa.agency_name, jv.position
+             FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE app.id = ? AND app.applicant_id = ?",
+            [$appId, $applicant['id']]
+        );
+        if (!$app || !in_array($app['validation_status'], ['rejected', 'resubmit'])) {
+            redirect(APP_URL . '/applicant/my-applications');
+        }
+
+        // Delete old docs for this application
+        $oldDocs = $this->applicationModel->getDocuments($appId);
+        foreach ($oldDocs as $od) {
+            $path = PUBLIC_PATH . $od['file_path'];
+            if (file_exists($path)) @unlink($path);
+        }
+        $db->execute("DELETE FROM application_documents WHERE application_id = ?", [$appId]);
+
+        // Upload new files
+        $uploadDir  = PUBLIC_PATH . '/uploads/documents/';
+        $allowedExt = ['pdf','doc','docx','jpg','jpeg','png'];
+        $uploaded   = 0;
+        foreach (['resume','cv','diploma','certificate','other'] as $type) {
+            if (empty($_FILES[$type]['name'])) continue;
+            $file     = $_FILES[$type];
+            $origName = basename($file['name']);
+            $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowedExt) || $file['size'] > 5*1024*1024) continue;
+            $storedName = 'app_' . $appId . '_' . $type . '_' . time() . '.' . $ext;
+            if (!move_uploaded_file($file['tmp_name'], $uploadDir . $storedName)) continue;
+            $db->execute(
+                "INSERT INTO application_documents
+                 (application_id, applicant_id, doc_type, original_name, stored_name, file_path, file_size, mime_type)
+                 VALUES (?,?,?,?,?,?,?,?)",
+                [$appId, $applicant['id'], $type, $origName, $storedName,
+                 '/uploads/documents/' . $storedName, $file['size'], $file['type']]
+            );
+            $uploaded++;
+        }
+
+        if ($uploaded === 0) {
+            flash('error', 'Please upload at least one document.');
+            redirect(APP_URL . '/applicant/my-applications/' . $appId . '/resubmit');
+        }
+
+        // Reset validation status to pending
+        $db->execute(
+            "UPDATE applications SET validation_status = 'pending_validation',
+             validated_by = NULL, validated_at = NULL, validator_remarks = NULL,
+             updated_at = NOW() WHERE id = ?",
+            [$appId]
+        );
+
+        // Notify validating officers
+        $officers = $db->fetchAll("SELECT id FROM users WHERE role = 'validating_officer' AND status = 'approved'");
+        $nm   = new NotificationModel();
+        $name = strtoupper($applicant['surname']) . ', ' . $applicant['firstname'];
+        foreach ($officers as $o) {
+            $nm->create((int)$o['id'], 'resubmission',
+                'Documents Resubmitted',
+                "Applicant {$name} resubmitted documents for \"{$app['position']}\" at {$app['agency_name']}.",
+                APP_URL . '/validating-officer/applications/' . $appId . '/review');
+        }
+
+        flash('success', 'Documents resubmitted successfully. A Validating Officer will review them.');
+        redirect(APP_URL . '/applicant/my-applications');
     }
 
     // GET /applicant/nsrp-form-download — blank NSRP form for printing

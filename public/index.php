@@ -163,17 +163,31 @@ $routes = [
     ['POST', '/agency/vacancies/store',             'AgencyController',           'storeVacancy'],
 
     // ── Applicant ─────────────────────────────────────────────────────────────
-    ['GET',  '/applicant/dashboard',                'ApplicantController',        'dashboard'],
-    ['GET',  '/applicant/register',                 'ApplicantController',        'register'],
-    ['POST', '/applicant/register/store',           'ApplicantController',        'storeRegistration'],
-    ['GET',  '/applicant/vacancies',                'ApplicantController',        'vacancies'],
-    ['POST', '/applicant/apply/{id}',               'ApplicantController',        'apply'],
-    ['GET',  '/applicant/my-applications',          'ApplicantController',        'myApplications'],
-    ['GET',  '/applicant/job-fairs',                'ApplicantController',        'jobFairs'],
-    ['GET',  '/applicant/job-fairs/{id}/register',  'ApplicantController',        'showFairRegistration'],
-    ['POST', '/applicant/job-fairs/{id}/register',  'ApplicantController',        'storeFairRegistration'],
-    ['GET',  '/applicant/job-fairs/{id}/confirmation', 'ApplicantController',     'registrationConfirmation'],
-    ['GET',  '/applicant/job-fairs/{id}/pdf',       'ApplicantController',        'downloadPdf'],
+    ['GET',  '/applicant/dashboard',                              'ApplicantController', 'dashboard'],
+    ['GET',  '/applicant/register',                               'ApplicantController', 'register'],
+    ['POST', '/applicant/register/store',                         'ApplicantController', 'storeRegistration'],
+    ['GET',  '/applicant/vacancies',                              'ApplicantController', 'vacancies'],
+    ['POST', '/applicant/apply/{id}',                             'ApplicantController', 'apply'],
+    ['GET',  '/applicant/my-applications',                        'ApplicantController', 'myApplications'],
+    ['GET',  '/applicant/my-applications/{id}/resubmit',          'ApplicantController', 'resubmitApplication'],
+    ['POST', '/applicant/my-applications/{id}/resubmit',          'ApplicantController', 'storeResubmit'],
+    ['GET',  '/applicant/requirements',                           'ApplicantController', 'requirements'],
+    ['POST', '/applicant/requirements/upload',                    'ApplicantController', 'uploadDocument'],
+    ['POST', '/applicant/requirements/submit',                    'ApplicantController', 'submitRequirements'],
+    ['POST', '/applicant/requirements/{id}/delete',               'ApplicantController', 'deleteDocument'],
+    ['GET',  '/applicant/nsrp-form-download',                     'ApplicantController', 'nsrpFormDownload'],
+    // Job Fair workflow
+    ['GET',  '/applicant/job-fairs',                              'ApplicantController', 'jobFairs'],
+    ['GET',  '/applicant/job-fairs/{id}/register',                'ApplicantController', 'showFairRegistration'],
+    ['POST', '/applicant/job-fairs/{id}/register',                'ApplicantController', 'storeFairRegistration'],
+    ['GET',  '/applicant/job-fairs/{id}/confirmation',            'ApplicantController', 'registrationConfirmation'],
+    ['GET',  '/applicant/job-fairs/{id}/pdf',                     'ApplicantController', 'downloadPdf'],
+    ['GET',  '/applicant/job-fairs/{id}/companies',               'ApplicantController', 'fairCompanies'],
+    // Note: {id}/{id2} pattern — uses two-param dispatch
+    ['GET',  '/applicant/job-fairs/{id}/companies/{id}/vacancies','ApplicantController', 'fairVacancies'],
+    ['GET',  '/applicant/job-fairs/{id}/apply/{id}',              'ApplicantController', 'showApply'],
+    ['POST', '/applicant/job-fairs/{id}/apply/{id}/store',        'ApplicantController', 'storeApply'],
+    ['GET',  '/applicant/interviews',                             'InterviewController', 'applicantInterviews'],
 
     // ── BEDO Officer ──────────────────────────────────────────────────────────
     ['GET',  '/bedo/dashboard',                     'BedoController',             'dashboard'],
@@ -185,18 +199,10 @@ $routes = [
     ['POST', '/bedo/posts/{id}/delete',             'BedoController',             'deletePost'],
 
     // ── Validating Officer ────────────────────────────────────────────────────
-    ['GET',  '/validating-officer/dashboard',                      'ValidatingOfficerController', 'dashboard'],
-    ['GET',  '/validating-officer/applicants',                     'ValidatingOfficerController', 'applicants'],
-    ['GET',  '/validating-officer/applicants/{id}/review',         'ValidatingOfficerController', 'review'],
-    ['POST', '/validating-officer/applicants/{id}/validate',       'ValidatingOfficerController', 'validate'],
-
-    // ── Applicant Requirements & Interviews ───────────────────────────────────
-    ['GET',  '/applicant/requirements',                            'ApplicantController',         'requirements'],
-    ['POST', '/applicant/requirements/upload',                     'ApplicantController',         'uploadDocument'],
-    ['POST', '/applicant/requirements/submit',                     'ApplicantController',         'submitRequirements'],
-    ['POST', '/applicant/requirements/{id}/delete',                'ApplicantController',         'deleteDocument'],
-    ['GET',  '/applicant/nsrp-form-download',                      'ApplicantController',         'nsrpFormDownload'],
-    ['GET',  '/applicant/interviews',                              'InterviewController',          'applicantInterviews'],
+    ['GET',  '/validating-officer/dashboard',                         'ValidatingOfficerController', 'dashboard'],
+    ['GET',  '/validating-officer/applicants',                        'ValidatingOfficerController', 'applicants'],
+    ['GET',  '/validating-officer/applications/{id}/review',          'ValidatingOfficerController', 'review'],
+    ['POST', '/validating-officer/applications/{id}/validate',        'ValidatingOfficerController', 'validate'],
 
     // ── Agency Interviews ─────────────────────────────────────────────────────
     ['GET',  '/agency/interviews',                                 'InterviewController',          'index'],
