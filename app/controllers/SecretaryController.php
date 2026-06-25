@@ -213,6 +213,94 @@ class SecretaryController
         redirect(APP_URL . '/secretary/resources');
     }
 
+    // POST /secretary/resources/confirm
+    // Secretary confirms available resources for a job fair and notifies Supervising Labor
+    public function confirmResources(): void
+    {
+        requireRole('secretary');
+        verifyCsrf();
+
+        $requestId   = (int)($_POST['job_fair_request_id'] ?? 0);
+        $resourceIds = $_POST['resource_ids'] ?? [];
+        $notes       = trim($_POST['notes'] ?? '');
+
+        if (!$requestId) {
+            flash('error', 'Please select a job fair.');
+            redirect(APP_URL . '/secretary/resources');
+        }
+
+        $request = $this->requestModel->find($requestId);
+        if (!$request) {
+            flash('error', 'Job fair not found.');
+            redirect(APP_URL . '/secretary/resources');
+        }
+
+        if (empty($resourceIds)) {
+            flash('error', 'Please select at least one resource to confirm.');
+            redirect(APP_URL . '/secretary/resources');
+        }
+
+        $userId    = (int)currentUser()['id'];
+        $db        = Database::getInstance();
+        $confirmed = 0;
+
+        foreach ($resourceIds as $resourceId) {
+            $resourceId = (int)$resourceId;
+            $resource   = $this->resourceModel->find($resourceId);
+            if (!$resource) continue;
+
+            // Check if already allocated for this job fair + resource combo
+            $existing = $db->fetchColumn(
+                "SELECT id FROM resource_allocations
+                 WHERE job_fair_request_id = ? AND resource_id = ?",
+                [$requestId, $resourceId]
+            );
+
+            if ($existing) {
+                // Update existing allocation to confirmed
+                $db->execute(
+                    "UPDATE resource_allocations
+                     SET confirmed_by = ?, confirmed_at = NOW(), notes = ?
+                     WHERE id = ?",
+                    [$userId, $notes ?: null, $existing]
+                );
+            } else {
+                // Create new allocation and mark confirmed immediately
+                $db->execute(
+                    "INSERT INTO resource_allocations
+                     (job_fair_request_id, resource_id, quantity_allocated, notes, allocated_by, confirmed_by, confirmed_at, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                    [
+                        $requestId,
+                        $resourceId,
+                        $resource['quantity'],
+                        $notes ?: null,
+                        $userId,
+                        $userId,
+                    ]
+                );
+            }
+            $confirmed++;
+        }
+
+        // Notify all Supervising Labor users
+        $slUsers = $this->userModel->findAll(['role' => 'supervising_labor', 'status' => 'approved']);
+        foreach ($slUsers as $su) {
+            $this->notificationModel->create(
+                (int)$su['id'],
+                'resources_confirmed',
+                'Resources Confirmed by Secretary',
+                "Secretary confirmed {$confirmed} resource(s) available for '{$request['title']}'. You can now view them on the Agencies page.",
+                APP_URL . '/supervising-labor/agencies?request_id=' . $requestId
+            );
+        }
+
+        auditLog('confirm_resources', 'resource_allocations',
+            "Secretary confirmed {$confirmed} resources for job fair ID {$requestId}.");
+        flash('success', "{$confirmed} resource(s) confirmed and Supervising Labor has been notified.");
+        redirect(APP_URL . '/secretary/resources');
+    }
+
     // POST /secretary/resources/allocate
     public function allocateResource(): void
     {
