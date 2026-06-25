@@ -63,7 +63,7 @@ class JobFairPostModel
         $fairId = $post['job_fair_request_id'];
 
         $companies = $this->db->fetchAll(
-            "SELECT pa.id AS agency_id, pa.agency_name, pa.location, pa.email, pa.phone,
+            "SELECT pa.id AS agency_id, pa.agency_name, pa.address AS location, pa.email, pa.phone,
                     GROUP_CONCAT(CONCAT(jv.position,' (',jv.available_slots,' slots)') SEPARATOR ', ') AS vacancies_list,
                     COUNT(jv.id) AS vacancy_count,
                     SUM(jv.available_slots) AS total_slots
@@ -76,7 +76,7 @@ class JobFairPostModel
         );
 
         $vacancies = $this->db->fetchAll(
-            "SELECT jv.*, pa.agency_name, pa.location AS agency_location
+            "SELECT jv.*, pa.agency_name, pa.address AS agency_location
              FROM job_vacancies jv
              JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
              WHERE pa.job_fair_request_id = ? AND jv.status = 'open'
