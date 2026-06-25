@@ -417,8 +417,12 @@ class ApplicantController
         );
 
         // Mark as pending_validation when any document is uploaded
-        if ($applicant['validation_status'] === 'not_submitted' || $applicant['validation_status'] === 'resubmit') {
-            $this->applicantModel->update($applicant['id'], ['validation_status' => 'pending']);
+        if (in_array($applicant['validation_status'] ?? 'not_submitted', ['not_submitted', 'resubmit', 'rejected'])) {
+            // Use direct SQL to guarantee it updates — bypasses any model field filtering
+            $db->execute(
+                "UPDATE applicants SET validation_status = 'pending', updated_at = NOW() WHERE id = ?",
+                [$applicant['id']]
+            );
 
             // Notify all validating officers
             $officers = $db->fetchAll(
@@ -494,7 +498,11 @@ class ApplicantController
             redirect(APP_URL . '/applicant/requirements');
         }
 
-        $this->applicantModel->update($applicant['id'], ['validation_status' => 'pending']);
+        // Direct SQL update — guaranteed to work regardless of model field filtering
+        $db->execute(
+            "UPDATE applicants SET validation_status = 'pending', updated_at = NOW() WHERE id = ?",
+            [$applicant['id']]
+        );
 
         // Notify validating officers
         $officers = $db->fetchAll("SELECT id FROM users WHERE role = 'validating_officer' AND status = 'approved'");

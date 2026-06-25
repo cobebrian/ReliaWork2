@@ -19,6 +19,8 @@ class ApplicantModel
         'preferred_occupation', 'preferred_location', 'expected_salary',
         'passport_no', 'educational_bg', 'trainings', 'eligibility',
         'work_experience', 'other_skills',
+        // Validation workflow
+        'validation_status', 'validated_by', 'validated_at', 'validator_remarks',
     ];
 
     public function __construct()
