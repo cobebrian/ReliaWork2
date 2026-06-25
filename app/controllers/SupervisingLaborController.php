@@ -507,6 +507,90 @@ class SupervisingLaborController
         redirect(APP_URL . '/supervising-labor/vacancies/review');
     }
 
+    // POST /supervising-labor/vacancies/{id}/accept
+    public function acceptVacancy(int $id): void
+    {
+        requireRole('supervising_labor');
+        verifyCsrf();
+
+        $vacancy = $this->vacancyModel->find($id);
+        if (!$vacancy) {
+            flash('error', 'Vacancy not found.');
+            redirect(APP_URL . '/supervising-labor/vacancies/review');
+        }
+
+        $remarks  = trim($_POST['sl_remarks'] ?? '');
+        $officerId = (int)currentUser()['id'];
+
+        $this->vacancyModel->update($id, [
+            'sl_status'        => 'accepted',
+            'sl_remarks'       => $remarks ?: null,
+            'sl_processed_by'  => $officerId,
+            'sl_processed_at'  => date('Y-m-d H:i:s'),
+            'status'           => 'open',   // keep vacancy active / officially added
+        ]);
+
+        // Notify the agency user who submitted this vacancy
+        if (!empty($vacancy['submitted_by'])) {
+            $this->notificationModel->create(
+                (int)$vacancy['submitted_by'],
+                'vacancy_accepted',
+                'Your Vacancy Was Accepted',
+                "Supervising Labor accepted your vacancy: \"{$vacancy['position']}\" at {$vacancy['company_name']}." .
+                ($remarks ? " Note: {$remarks}" : '') .
+                " It is now officially part of the job fair.",
+                APP_URL . '/agency/vacancies'
+            );
+        }
+
+        auditLog('accept_vacancy', 'vacancies', "Accepted vacancy ID {$id}: {$vacancy['position']} at {$vacancy['company_name']}.");
+        flash('success', "Vacancy \"{$vacancy['position']}\" accepted and agency has been notified.");
+        redirect(APP_URL . '/supervising-labor/vacancies/review');
+    }
+
+    // POST /supervising-labor/vacancies/{id}/reject
+    public function rejectVacancy(int $id): void
+    {
+        requireRole('supervising_labor');
+        verifyCsrf();
+
+        $vacancy = $this->vacancyModel->find($id);
+        if (!$vacancy) {
+            flash('error', 'Vacancy not found.');
+            redirect(APP_URL . '/supervising-labor/vacancies/review');
+        }
+
+        $remarks   = trim($_POST['sl_remarks'] ?? '');
+        $officerId = (int)currentUser()['id'];
+
+        if (empty($remarks)) {
+            flash('error', 'Please provide a reason for rejection.');
+            redirect(APP_URL . '/supervising-labor/vacancies/review');
+        }
+
+        $this->vacancyModel->update($id, [
+            'sl_status'        => 'rejected',
+            'sl_remarks'       => $remarks,
+            'sl_processed_by'  => $officerId,
+            'sl_processed_at'  => date('Y-m-d H:i:s'),
+        ]);
+
+        // Notify the agency user
+        if (!empty($vacancy['submitted_by'])) {
+            $this->notificationModel->create(
+                (int)$vacancy['submitted_by'],
+                'vacancy_rejected',
+                'Your Vacancy Was Not Accepted',
+                "Supervising Labor did not accept your vacancy: \"{$vacancy['position']}\" at {$vacancy['company_name']}. Reason: {$remarks}",
+                APP_URL . '/agency/vacancies'
+            );
+        }
+
+        auditLog('reject_vacancy', 'vacancies', "Rejected vacancy ID {$id}: {$vacancy['position']}. Reason: {$remarks}");
+        flash('success', "Vacancy rejected. Agency has been notified.");
+        redirect(APP_URL . '/supervising-labor/vacancies/review');
+    }
+
     // GET /supervising-labor/registration-form/{requestId}
     public function registrationForm(int $requestId): void
     {
