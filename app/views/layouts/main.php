@@ -47,9 +47,10 @@ switch ($role) {
         break;
     case 'agency':
         $navLinks = [
-            ['url' => APP_URL . '/agency/dashboard',    'icon' => 'bi-speedometer2',  'label' => 'Dashboard'],
-            ['url' => APP_URL . '/agency/vacancies',    'icon' => 'bi-briefcase',     'label' => 'My Vacancies'],
-            ['url' => APP_URL . '/agency/interviews',   'icon' => 'bi-camera-video',  'label' => 'Interviews'],
+            ['url' => APP_URL . '/agency/dashboard',    'icon' => 'bi-speedometer2',    'label' => 'Dashboard'],
+            ['url' => APP_URL . '/agency/vacancies',    'icon' => 'bi-briefcase',        'label' => 'My Vacancies'],
+            ['url' => APP_URL . '/agency/interviews',   'icon' => 'bi-camera-video',     'label' => 'Interviews'],
+            ['url' => APP_URL . '/agency/hiring',       'icon' => 'bi-person-check-fill','label' => 'Qualified Applicants'],
         ];
         break;
     case 'applicant':
@@ -61,6 +62,7 @@ switch ($role) {
             ['url' => APP_URL . '/applicant/vacancies',        'icon' => 'bi-search',             'label' => 'Browse Jobs'],
             ['url' => APP_URL . '/applicant/my-applications',  'icon' => 'bi-file-earmark-text',  'label' => 'My Applications'],
             ['url' => APP_URL . '/applicant/interviews',       'icon' => 'bi-camera-video',       'label' => 'My Interviews'],
+            ['url' => APP_URL . '/applicant/my-applications',  'icon' => 'bi-file-earmark-text',  'label' => 'My Applications'],
         ];
         break;
     case 'validating_officer':

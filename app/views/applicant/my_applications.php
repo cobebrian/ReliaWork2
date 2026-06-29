@@ -77,6 +77,12 @@
                     <i class="bi bi-arrow-clockwise me-1"></i>Resubmit Documents
                 </a>
                 <?php endif; ?>
+                <?php if (in_array($app['status'], ['qualified_for_contact','waitlisted','awaiting_requirements','requirements_submitted','first_day_scheduled','hired'])): ?>
+                <a href="<?= APP_URL ?>/applicant/messages/<?= $app['id'] ?>"
+                   class="btn btn-sm btn-primary">
+                    <i class="bi bi-chat-dots me-1"></i>Messages
+                </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>

@@ -301,7 +301,7 @@ class InterviewController
         $hiringOutcome  = $_POST['hiring_outcome'] ?? 'pending';
         $hiringRemarks  = trim($_POST['hiring_remarks'] ?? '');
 
-        $validOutcomes = ['pending', 'hired', 'not_hired', 'for_consideration'];
+        $validOutcomes = ['pending', 'qualified_for_contact', 'waitlisted', 'not_qualified'];
         if (!in_array($hiringOutcome, $validOutcomes)) $hiringOutcome = 'pending';
 
         $pdo = $this->db->getPdo();
@@ -337,13 +337,22 @@ class InterviewController
             );
             if ($appRow) {
                 $appStatus = match($hiringOutcome) {
-                    'hired'     => 'hired',
-                    'not_hired' => 'rejected',
-                    default     => 'shortlisted',
+                    'qualified_for_contact' => 'qualified_for_contact',
+                    'waitlisted'            => 'waitlisted',
+                    'not_qualified'         => 'not_qualified',
+                    default                 => 'shortlisted',
                 };
                 $this->db->execute(
                     "UPDATE applications SET status = ?, updated_at = NOW() WHERE id = ?",
                     [$appStatus, $appRow['id']]
+                );
+                // Log status change
+                $this->db->execute(
+                    "INSERT INTO application_status_history
+                     (application_id, from_status, to_status, changed_by, remarks, changed_at)
+                     VALUES (?, 'interview_completed', ?, ?, ?, NOW())",
+                    [$appRow['id'], $appStatus, $userId,
+                     "Interview completed. Outcome: " . ucfirst(str_replace('_',' ',$hiringOutcome))]
                 );
             }
 
@@ -370,10 +379,10 @@ class InterviewController
         $applicant = $this->db->fetch("SELECT * FROM applicants WHERE id = ?", [$interview['applicant_id']]);
         if ($applicant && $applicant['user_id']) {
             $outcomeMsg = match($hiringOutcome) {
-                'hired'            => 'Congratulations! You have been marked as HIRED.',
-                'not_hired'        => 'Your interview has been completed. Unfortunately you were not selected at this time.',
-                'for_consideration'=> 'Your interview is complete. You are being considered for the position.',
-                default            => 'Your interview has been completed.',
+                'qualified_for_contact' => 'Congratulations! You passed the interview. The company will contact you soon with the next steps.',
+                'waitlisted'            => 'You passed the interview and are on the waitlist. We will contact you if a slot becomes available.',
+                'not_qualified'         => 'Your interview has been completed. Unfortunately you were not selected at this time. Thank you for your interest.',
+                default                 => 'Your interview has been completed. You will be notified of the next steps.',
             };
             $this->notifModel->create(
                 (int)$applicant['user_id'],

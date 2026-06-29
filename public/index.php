@@ -51,6 +51,7 @@ require_once APP_PATH . '/controllers/NotificationController.php';
 require_once APP_PATH . '/controllers/ValidatingOfficerController.php';
 require_once APP_PATH . '/controllers/InterviewController.php';
 require_once APP_PATH . '/controllers/ReportingOfficerController.php';
+require_once APP_PATH . '/controllers/HiringController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -212,6 +213,19 @@ $routes = [
     ['POST', '/agency/interviews/{id}/save-evaluations',           'InterviewController',          'saveEvaluations'],
     ['POST', '/agency/interviews/{id}/complete',                   'InterviewController',          'complete'],
     ['POST', '/agency/interviews/questions/{id}/delete',           'InterviewController',          'deleteQuestion'],
+
+    // ── Agency Hiring (post-interview workflow) ───────────────────────────────
+    ['GET',  '/agency/hiring',                                     'HiringController',             'dashboard'],
+    ['GET',  '/agency/hiring/{id}',                                'HiringController',             'profile'],
+    ['POST', '/agency/hiring/{id}/send-message',                   'HiringController',             'sendMessage'],
+    ['POST', '/agency/hiring/{id}/request-requirements',           'HiringController',             'requestRequirements'],
+    ['POST', '/agency/hiring/{id}/schedule-first-day',             'HiringController',             'scheduleFirstDay'],
+    ['POST', '/agency/hiring/{id}/mark-hired',                     'HiringController',             'markHired'],
+
+    // ── Applicant Messaging + Employment Docs ─────────────────────────────────
+    ['GET',  '/applicant/messages/{id}',                           'HiringController',             'applicantMessages'],
+    ['POST', '/applicant/messages/{id}/reply',                     'HiringController',             'applicantReply'],
+    ['POST', '/applicant/messages/{id}/upload-employment-docs',    'HiringController',             'uploadEmploymentDocs'],
 
     // ── Reporting Officer ─────────────────────────────────────────────────────
     ['GET',  '/reporting-officer/dashboard',                    'ReportingOfficerController', 'dashboard'],

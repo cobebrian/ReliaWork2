@@ -266,10 +266,9 @@
                             </label>
                             <select name="hiring_outcome" class="form-select form-select-sm" required>
                                 <option value="">— Select Decision —</option>
-                                <option value="hired">✓ Hired</option>
-                                <option value="not_hired">✗ Not Hired</option>
-                                <option value="for_consideration">⏳ Qualified but Not Selected (For Pooling)</option>
-                                <option value="pending">📋 Pending Final Decision</option>
+                                <option value="qualified_for_contact">✓ Qualified (For Contact)</option>
+                                <option value="waitlisted">⏳ Qualified but Waitlisted</option>
+                                <option value="not_qualified">✗ Not Qualified</option>
                             </select>
                         </div>
                         <div class="col-md-6">
