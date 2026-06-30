@@ -692,4 +692,122 @@ class SupervisingLaborController
         flash('success', 'Public registration form generated and published.');
         redirect(APP_URL . '/supervising-labor/registration-form/' . $requestId);
     }
+
+    // GET /supervising-labor/reports — view submitted job fair reports
+    public function slReports(): void
+    {
+        requireRole('supervising_labor');
+
+        $search = trim($_GET['search'] ?? '');
+        $status = $_GET['status'] ?? '';
+
+        $db  = Database::getInstance();
+        $sql = "SELECT r.*, jfr.title AS fair_title, jfr.requested_date,
+                       u.name AS generated_by_name
+                FROM job_fair_reports r
+                JOIN job_fair_requests jfr ON jfr.id = r.job_fair_request_id
+                LEFT JOIN users u ON u.id = r.generated_by
+                WHERE r.report_status IN ('submitted','reviewed')";
+        $params = [];
+        if ($status) { $sql .= " AND r.report_status = ?"; $params[] = $status; }
+        if ($search) { $sql .= " AND jfr.title LIKE ?"; $params[] = '%'.$search.'%'; }
+        $sql .= " ORDER BY r.submitted_at DESC, r.generated_at DESC";
+
+        $reports   = $db->fetchAll($sql, $params);
+        $pageTitle = 'Submitted Job Fair Reports';
+        $success   = getFlash('success');
+        include VIEW_PATH . '/supervising_labor/sl_reports.php';
+    }
+
+    // GET /supervising-labor/reports/{id} — view single report
+    public function slViewReport(int $reportId): void
+    {
+        requireRole('supervising_labor');
+
+        $db = Database::getInstance();
+        $report = $db->fetch(
+            "SELECT r.*, jfr.title AS fair_title, jfr.requested_date, jfr.venue,
+                    u.name AS generated_by_name
+             FROM job_fair_reports r
+             JOIN job_fair_requests jfr ON jfr.id = r.job_fair_request_id
+             LEFT JOIN users u ON u.id = r.generated_by
+             WHERE r.id = ? AND r.report_status IN ('submitted','reviewed')",
+            [$reportId]
+        );
+        if (!$report) {
+            flash('error', 'Report not found or not yet submitted.');
+            redirect(APP_URL . '/supervising-labor/reports');
+        }
+
+        $agencies = $db->fetchAll(
+            "SELECT pa.id, pa.agency_name, pa.email,
+                    COUNT(DISTINCT jv.id) AS vacancy_count,
+                    SUM(jv.available_slots) AS total_slots,
+                    COUNT(DISTINCT iv.applicant_id) AS interviewed_count,
+                    SUM(CASE WHEN iv.hiring_outcome = 'hired' THEN 1 ELSE 0 END) AS hired_count
+             FROM participating_agencies pa
+             LEFT JOIN job_vacancies jv ON jv.participating_agency_id = pa.id
+             LEFT JOIN interviews iv ON iv.agency_id = pa.id AND iv.status = 'completed'
+             WHERE pa.job_fair_request_id = ?
+             GROUP BY pa.id ORDER BY pa.agency_name",
+            [$report['job_fair_request_id']]
+        );
+
+        $history = $db->fetchAll(
+            "SELECT rsh.*, u.name AS performed_by_name
+             FROM report_submission_history rsh
+             LEFT JOIN users u ON u.id = rsh.performed_by
+             WHERE rsh.report_id = ? ORDER BY rsh.performed_at ASC",
+            [$reportId]
+        );
+
+        $pageTitle = 'Report — ' . $report['fair_title'];
+        include VIEW_PATH . '/supervising_labor/sl_view_report.php';
+    }
+
+    // POST /supervising-labor/reports/{id}/mark-reviewed
+    public function slMarkReviewed(int $reportId): void
+    {
+        requireRole('supervising_labor');
+        verifyCsrf();
+
+        $db      = Database::getInstance();
+        $report  = $db->fetch("SELECT * FROM job_fair_reports WHERE id = ? AND report_status = 'submitted'", [$reportId]);
+        if (!$report) {
+            flash('error', 'Report not found or already reviewed.');
+            redirect(APP_URL . '/supervising-labor/reports');
+        }
+
+        $remarks   = trim($_POST['reviewer_remarks'] ?? '');
+        $reviewerId = (int)currentUser()['id'];
+
+        $db->execute(
+            "UPDATE job_fair_reports
+             SET report_status = 'reviewed', reviewed_at = NOW(), reviewed_by = ?, reviewer_remarks = ?
+             WHERE id = ?",
+            [$reviewerId, $remarks ?: null, $reportId]
+        );
+        $db->execute(
+            "INSERT INTO report_submission_history (report_id, action, performed_by, remarks, performed_at)
+             VALUES (?, 'reviewed', ?, ?, NOW())",
+            [$reportId, $reviewerId, $remarks ?: 'Marked as reviewed by Supervising Labor.']
+        );
+
+        // Notify reporting officer
+        if ($report['generated_by']) {
+            $nm = new NotificationModel();
+            $nm->create(
+                (int)$report['generated_by'],
+                'report_reviewed',
+                'Report Reviewed',
+                "Supervising Labor has reviewed your Job Fair Report." .
+                ($remarks ? " Remarks: {$remarks}" : ''),
+                APP_URL . '/reporting-officer/reports'
+            );
+        }
+
+        auditLog('review_report', 'job_fair_reports', "SL reviewed report ID {$reportId}.");
+        flash('success', 'Report marked as reviewed. Reporting Officer has been notified.');
+        redirect(APP_URL . '/supervising-labor/reports/' . $reportId);
+    }
 }

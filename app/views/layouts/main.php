@@ -30,6 +30,7 @@ switch ($role) {
             ['url' => APP_URL . '/supervising-labor/requests',   'icon' => 'bi-clipboard-check',  'label' => 'Job Fair Requests'],
             ['url' => APP_URL . '/supervising-labor/agencies',   'icon' => 'bi-building',         'label' => 'Agencies'],
             ['url' => APP_URL . '/supervising-labor/vacancies',  'icon' => 'bi-briefcase',        'label' => 'Vacancies'],
+            ['url' => APP_URL . '/supervising-labor/reports',    'icon' => 'bi-file-earmark-bar-graph', 'label' => 'Reports'],
         ];
         break;
     case 'barangay_captain':
@@ -76,9 +77,10 @@ switch ($role) {
     case 'reporting_officer':
         $navLinks = [
             ['url' => APP_URL . '/reporting-officer/dashboard',  'icon' => 'bi-speedometer2',        'label' => 'Dashboard'],
+            ['url' => APP_URL . '/reporting-officer/reports',     'icon' => 'bi-archive',              'label' => 'Reports Repository'],
             ['url' => APP_URL . '/reporting-officer/interviews',  'icon' => 'bi-camera-video',        'label' => 'All Interviews'],
-            ['url' => APP_URL . '/reporting-officer/interviews?outcome=hired',     'icon' => 'bi-person-check', 'label' => 'Hired'],
-            ['url' => APP_URL . '/reporting-officer/interviews?outcome=not_hired', 'icon' => 'bi-person-x',     'label' => 'Not Hired'],
+            ['url' => APP_URL . '/reporting-officer/interviews?outcome=qualified_for_contact', 'icon' => 'bi-person-check', 'label' => 'Qualified'],
+            ['url' => APP_URL . '/reporting-officer/interviews?outcome=hired',                 'icon' => 'bi-trophy',       'label' => 'Hired'],
         ];
         break;
     case 'techvoc_supervisor':

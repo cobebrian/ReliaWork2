@@ -339,23 +339,52 @@ class ReportingOfficerController
              WHERE pa.job_fair_request_id = ? AND iv.status = 'completed'",
             [$fairId]
         );
-        $totalHired       = (int)$this->db->fetchColumn(
-            "SELECT COUNT(*) FROM interviews iv
-             JOIN participating_agencies pa ON pa.id = iv.agency_id
-             WHERE pa.job_fair_request_id = ? AND iv.hiring_outcome = 'hired'",
+        $totalHired = (int)$this->db->fetchColumn(
+            "SELECT COUNT(DISTINCT app.applicant_id) FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE pa.job_fair_request_id = ? AND app.status = 'hired'",
             [$fairId]
         );
-        $totalNotHired    = (int)$this->db->fetchColumn(
+        $totalNotQualified = (int)$this->db->fetchColumn(
             "SELECT COUNT(*) FROM interviews iv
              JOIN participating_agencies pa ON pa.id = iv.agency_id
-             WHERE pa.job_fair_request_id = ? AND iv.hiring_outcome = 'not_hired'",
+             WHERE pa.job_fair_request_id = ? AND iv.hiring_outcome = 'not_qualified'",
             [$fairId]
         );
-        $totalAgencies    = (int)$this->db->fetchColumn(
+        $totalQualified = (int)$this->db->fetchColumn(
+            "SELECT COUNT(DISTINCT app.applicant_id) FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE pa.job_fair_request_id = ? AND app.status = 'qualified_for_contact'",
+            [$fairId]
+        );
+        $totalWaitlisted = (int)$this->db->fetchColumn(
+            "SELECT COUNT(DISTINCT app.applicant_id) FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE pa.job_fair_request_id = ? AND app.status = 'waitlisted'",
+            [$fairId]
+        );
+        $totalAwaitingReqs = (int)$this->db->fetchColumn(
+            "SELECT COUNT(DISTINCT app.applicant_id) FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE pa.job_fair_request_id = ? AND app.status IN ('awaiting_requirements','requirements_submitted')",
+            [$fairId]
+        );
+        $totalScheduled = (int)$this->db->fetchColumn(
+            "SELECT COUNT(DISTINCT app.applicant_id) FROM applications app
+             JOIN job_vacancies jv ON jv.id = app.job_vacancy_id
+             JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
+             WHERE pa.job_fair_request_id = ? AND app.status = 'first_day_scheduled'",
+            [$fairId]
+        );
+        $totalAgencies  = (int)$this->db->fetchColumn(
             "SELECT COUNT(*) FROM participating_agencies WHERE job_fair_request_id = ? AND status = 'confirmed'",
             [$fairId]
         );
-        $totalVacancies   = (int)$this->db->fetchColumn(
+        $totalVacancies = (int)$this->db->fetchColumn(
             "SELECT COUNT(jv.id) FROM job_vacancies jv
              JOIN participating_agencies pa ON pa.id = jv.participating_agency_id
              WHERE pa.job_fair_request_id = ?",
@@ -364,39 +393,245 @@ class ReportingOfficerController
         $employmentRate = $totalInterviewed > 0
             ? round(($totalHired / $totalInterviewed) * 100, 2) : 0;
 
-        // Upsert report record
-        $existing = $this->db->fetchColumn(
-            "SELECT id FROM job_fair_reports WHERE job_fair_request_id = ?",
+        $officerId = (int)currentUser()['id'];
+        $remarks   = trim($_POST['overall_remarks'] ?? '');
+        $observ    = trim($_POST['observations']    ?? '');
+        $recomm    = trim($_POST['recommendations'] ?? '');
+
+        // Preserve draft/submitted status — only reset to draft on explicit regenerate
+        $existing = $this->db->fetch(
+            "SELECT id, report_status FROM job_fair_reports WHERE job_fair_request_id = ?",
             [$fairId]
         );
-        if ($existing) {
+
+        $pdo = $this->db->getPdo();
+        $pdo->beginTransaction();
+        try {
+            if ($existing) {
+                $this->db->execute(
+                    "UPDATE job_fair_reports
+                     SET total_applicants=?, total_validated=?, total_interviewed=?,
+                         total_hired=?, total_not_hired=?, total_agencies=?,
+                         total_vacancies=?, employment_rate=?,
+                         total_qualified=?, total_waitlisted=?, total_awaiting_reqs=?,
+                         total_scheduled=?,
+                         overall_remarks=?, observations=?, recommendations=?,
+                         report_status='draft', generated_by=?, generated_at=NOW()
+                     WHERE id=?",
+                    [$totalApplicants, $totalValidated, $totalInterviewed,
+                     $totalHired, $totalNotQualified, $totalAgencies, $totalVacancies,
+                     $employmentRate, $totalQualified, $totalWaitlisted, $totalAwaitingReqs,
+                     $totalScheduled,
+                     $remarks ?: null, $observ ?: null, $recomm ?: null,
+                     $officerId, $existing['id']]
+                );
+                $reportId = (int)$existing['id'];
+            } else {
+                $this->db->execute(
+                    "INSERT INTO job_fair_reports
+                     (job_fair_request_id, generated_by, total_applicants, total_validated,
+                      total_interviewed, total_hired, total_not_hired, total_agencies,
+                      total_vacancies, employment_rate, total_qualified, total_waitlisted,
+                      total_awaiting_reqs, total_scheduled, overall_remarks, observations,
+                      recommendations, report_status, generated_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft',NOW())",
+                    [$fairId, $officerId, $totalApplicants, $totalValidated,
+                     $totalInterviewed, $totalHired, $totalNotQualified, $totalAgencies,
+                     $totalVacancies, $employmentRate, $totalQualified, $totalWaitlisted,
+                     $totalAwaitingReqs, $totalScheduled,
+                     $remarks ?: null, $observ ?: null, $recomm ?: null]
+                );
+                $reportId = (int)$this->db->lastInsertId();
+            }
+
+            // Log generation
+            $this->db->execute(
+                "INSERT INTO report_submission_history
+                 (report_id, action, performed_by, remarks, performed_at)
+                 VALUES (?, 'generated', ?, ?, NOW())",
+                [$reportId, $officerId, "Report generated/regenerated."]
+            );
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            flash('error', 'Failed to generate report. Please try again.');
+            redirect(APP_URL . '/reporting-officer/job-fairs/' . $fairId);
+        }
+
+        auditLog('generate_report', 'job_fair_reports', "Report generated for job fair ID {$fairId}. Report ID: {$reportId}");
+        flash('success', 'Summary report generated successfully.');
+        redirect(APP_URL . '/reporting-officer/job-fairs/' . $fairId);
+    }
+
+    // POST /reporting-officer/reports/{reportId}/submit
+    public function submitReport(int $reportId): void
+    {
+        requireRole('reporting_officer');
+        verifyCsrf();
+
+        $report = $this->db->fetch(
+            "SELECT r.*, jfr.title AS fair_title FROM job_fair_reports r
+             JOIN job_fair_requests jfr ON jfr.id = r.job_fair_request_id
+             WHERE r.id = ?",
+            [$reportId]
+        );
+        if (!$report) {
+            flash('error', 'Report not found.');
+            redirect(APP_URL . '/reporting-officer/reports');
+        }
+        if ($report['report_status'] === 'submitted') {
+            flash('info', 'Report already submitted.');
+            redirect(APP_URL . '/reporting-officer/reports');
+        }
+
+        $officerId = (int)currentUser()['id'];
+
+        // Find all SL users to submit to
+        $slUsers = $this->db->fetchAll(
+            "SELECT id FROM users WHERE role = 'supervising_labor' AND status = 'approved'"
+        );
+        if (empty($slUsers)) {
+            flash('error', 'No Supervising Labor users found to submit to.');
+            redirect(APP_URL . '/reporting-officer/job-fairs/' . $report['job_fair_request_id']);
+        }
+
+        $pdo = $this->db->getPdo();
+        $pdo->beginTransaction();
+        try {
             $this->db->execute(
                 "UPDATE job_fair_reports
-                 SET total_applicants=?, total_validated=?, total_interviewed=?,
-                     total_hired=?, total_not_hired=?, total_agencies=?,
-                     total_vacancies=?, employment_rate=?, generated_by=?, generated_at=NOW()
-                 WHERE id=?",
-                [$totalApplicants, $totalValidated, $totalInterviewed,
-                 $totalHired, $totalNotHired, $totalAgencies,
-                 $totalVacancies, $employmentRate,
-                 (int)currentUser()['id'], $existing]
+                 SET report_status = 'submitted', submitted_at = NOW(), submitted_to = ?
+                 WHERE id = ?",
+                [$slUsers[0]['id'], $reportId]
             );
-        } else {
+
             $this->db->execute(
-                "INSERT INTO job_fair_reports
-                 (job_fair_request_id, generated_by, total_applicants, total_validated,
-                  total_interviewed, total_hired, total_not_hired, total_agencies,
-                  total_vacancies, employment_rate, generated_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,NOW())",
-                [$fairId, (int)currentUser()['id'],
-                 $totalApplicants, $totalValidated, $totalInterviewed,
-                 $totalHired, $totalNotHired, $totalAgencies,
-                 $totalVacancies, $employmentRate]
+                "INSERT INTO report_submission_history
+                 (report_id, action, performed_by, remarks, performed_at)
+                 VALUES (?, 'submitted', ?, ?, NOW())",
+                [$reportId, $officerId, "Report submitted to Supervising Labor."]
+            );
+
+            $pdo->commit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            flash('error', 'Failed to submit report.');
+            redirect(APP_URL . '/reporting-officer/job-fairs/' . $report['job_fair_request_id']);
+        }
+
+        // Notify all SL users
+        foreach ($slUsers as $sl) {
+            $this->notifModel->create(
+                (int)$sl['id'],
+                'report_submitted',
+                'Job Fair Report Submitted',
+                "Reporting Officer submitted the report for \"{$report['fair_title']}\". Please review.",
+                APP_URL . '/supervising-labor/reports/' . $reportId
             );
         }
 
-        auditLog('generate_report', 'job_fair_reports', "Report generated for job fair ID {$fairId}.");
-        flash('success', 'Report generated successfully.');
-        redirect(APP_URL . '/reporting-officer/job-fairs/' . $fairId);
+        auditLog('submit_report', 'job_fair_reports', "Report {$reportId} submitted to Supervising Labor.");
+        flash('success', 'Report submitted to Supervising Labor. They have been notified.');
+        redirect(APP_URL . '/reporting-officer/reports');
+    }
+
+    // GET /reporting-officer/reports — repository of all reports
+    public function reports(): void
+    {
+        requireRole('reporting_officer');
+
+        $search = trim($_GET['search'] ?? '');
+        $status = $_GET['status'] ?? '';
+
+        $sql = "SELECT r.*, jfr.title AS fair_title, jfr.requested_date,
+                       u.name AS generated_by_name
+                FROM job_fair_reports r
+                JOIN job_fair_requests jfr ON jfr.id = r.job_fair_request_id
+                LEFT JOIN users u ON u.id = r.generated_by
+                WHERE 1=1";
+        $params = [];
+        if ($status) { $sql .= " AND r.report_status = ?"; $params[] = $status; }
+        if ($search) {
+            $sql .= " AND jfr.title LIKE ?";
+            $params[] = '%' . $search . '%';
+        }
+        $sql .= " ORDER BY r.generated_at DESC";
+
+        $reports   = $this->db->fetchAll($sql, $params);
+        $pageTitle = 'Job Fair Reports Repository';
+        $success   = getFlash('success');
+        include VIEW_PATH . '/reporting_officer/reports.php';
+    }
+
+    // GET /reporting-officer/reports/{id}/view — view a saved report
+    public function viewReport(int $reportId): void
+    {
+        requireRole('reporting_officer');
+
+        $report = $this->db->fetch(
+            "SELECT r.*, jfr.title AS fair_title, jfr.requested_date, jfr.venue,
+                    u.name AS generated_by_name, u2.name AS reviewed_by_name
+             FROM job_fair_reports r
+             JOIN job_fair_requests jfr ON jfr.id = r.job_fair_request_id
+             LEFT JOIN users u  ON u.id  = r.generated_by
+             LEFT JOIN users u2 ON u2.id = r.reviewed_by
+             WHERE r.id = ?",
+            [$reportId]
+        );
+        if (!$report) {
+            flash('error', 'Report not found.');
+            redirect(APP_URL . '/reporting-officer/reports');
+        }
+
+        $fairId   = $report['job_fair_request_id'];
+        $fair     = $this->db->fetch("SELECT * FROM job_fair_requests WHERE id = ?", [$fairId]);
+        $agencies = $this->_getAgenciesForFair($fairId);
+        $history  = $this->db->fetchAll(
+            "SELECT rsh.*, u.name AS performed_by_name
+             FROM report_submission_history rsh
+             LEFT JOIN users u ON u.id = rsh.performed_by
+             WHERE rsh.report_id = ? ORDER BY rsh.performed_at ASC",
+            [$reportId]
+        );
+
+        // Summary recomputed from stored values
+        $summary = [
+            'total_applicants'   => $report['total_applicants'],
+            'total_validated'    => $report['total_validated'],
+            'total_interviewed'  => $report['total_interviewed'],
+            'total_hired'        => $report['total_hired'],
+            'total_not_hired'    => $report['total_not_hired'],
+            'total_qualified'    => $report['total_qualified'],
+            'total_waitlisted'   => $report['total_waitlisted'],
+            'total_awaiting_reqs'=> $report['total_awaiting_reqs'],
+            'total_scheduled'    => $report['total_scheduled'],
+            'total_agencies'     => $report['total_agencies'],
+            'total_vacancies'    => $report['total_vacancies'],
+            'employment_rate'    => $report['employment_rate'],
+        ];
+
+        $pageTitle = 'Report — ' . $report['fair_title'];
+        include VIEW_PATH . '/reporting_officer/view_report.php';
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private function _getAgenciesForFair(int $fairId): array
+    {
+        return $this->db->fetchAll(
+            "SELECT pa.id, pa.agency_name, pa.email, pa.status,
+                    COUNT(DISTINCT jv.id) AS vacancy_count,
+                    SUM(jv.available_slots) AS total_slots,
+                    COUNT(DISTINCT iv.applicant_id) AS interviewed_count,
+                    SUM(CASE WHEN iv.hiring_outcome = 'hired' THEN 1 ELSE 0 END) AS hired_count,
+                    SUM(CASE WHEN iv.hiring_outcome = 'not_qualified' THEN 1 ELSE 0 END) AS not_hired_count
+             FROM participating_agencies pa
+             LEFT JOIN job_vacancies jv ON jv.participating_agency_id = pa.id
+             LEFT JOIN interviews iv ON iv.agency_id = pa.id AND iv.status = 'completed'
+             WHERE pa.job_fair_request_id = ?
+             GROUP BY pa.id ORDER BY pa.agency_name",
+            [$fairId]
+        );
     }
 }

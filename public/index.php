@@ -229,11 +229,19 @@ $routes = [
 
     // ── Reporting Officer ─────────────────────────────────────────────────────
     ['GET',  '/reporting-officer/dashboard',                    'ReportingOfficerController', 'dashboard'],
+    ['GET',  '/reporting-officer/reports',                      'ReportingOfficerController', 'reports'],
+    ['GET',  '/reporting-officer/reports/{id}/view',            'ReportingOfficerController', 'viewReport'],
+    ['POST', '/reporting-officer/reports/{id}/submit',          'ReportingOfficerController', 'submitReport'],
     ['GET',  '/reporting-officer/interviews',                   'ReportingOfficerController', 'interviews'],
     ['GET',  '/reporting-officer/interview/{id}',               'ReportingOfficerController', 'interviewDetail'],
     ['POST', '/reporting-officer/interview/{id}/update-outcome','ReportingOfficerController', 'updateOutcome'],
     ['GET',  '/reporting-officer/job-fairs/{id}',               'ReportingOfficerController', 'jobFairReport'],
     ['POST', '/reporting-officer/generate-report/{id}',         'ReportingOfficerController', 'generateReport'],
+
+    // ── Supervising Labor — Reports ───────────────────────────────────────────
+    ['GET',  '/supervising-labor/reports',                      'SupervisingLaborController', 'slReports'],
+    ['GET',  '/supervising-labor/reports/{id}',                 'SupervisingLaborController', 'slViewReport'],
+    ['POST', '/supervising-labor/reports/{id}/mark-reviewed',   'SupervisingLaborController', 'slMarkReviewed'],
 
     // ── TECH-VOC Supervisor ───────────────────────────────────────────────────
     ['GET',  '/techvoc/dashboard',                  'TechVocController',          'dashboard'],

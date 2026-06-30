@@ -9,15 +9,82 @@
     <a href="<?= APP_URL ?>/reporting-officer/dashboard" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Dashboard
     </a>
-    <form method="POST" action="<?= APP_URL ?>/reporting-officer/generate-report/<?= $fair['id'] ?>" class="d-inline">
+    <a href="<?= APP_URL ?>/reporting-officer/reports" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-archive me-1"></i>All Reports
+    </a>
+    <?php
+    // Check if a saved report exists for this fair
+    $db = Database::getInstance();
+    $savedReport = $db->fetch(
+        "SELECT id, report_status, generated_at FROM job_fair_reports WHERE job_fair_request_id = ?",
+        [$fair['id']]
+    );
+    ?>
+    <?php if ($savedReport): ?>
+    <span class="badge bg-<?= ['draft'=>'secondary','submitted'=>'primary','reviewed'=>'success'][$savedReport['report_status']] ?> py-2 px-3">
+        <?= ucfirst($savedReport['report_status']) ?>
+        — Generated <?= date('M d, Y', strtotime($savedReport['generated_at'])) ?>
+    </span>
+    <?php if ($savedReport['report_status'] === 'draft'): ?>
+    <form method="POST" action="<?= APP_URL ?>/reporting-officer/reports/<?= $savedReport['id'] ?>/submit" class="d-inline">
         <?= csrfField() ?>
-        <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-arrow-clockwise me-1"></i>Regenerate Report
+        <button type="submit" class="btn btn-primary btn-sm"
+                onclick="return confirm('Submit this report to Supervising Labor?')">
+            <i class="bi bi-send me-1"></i>Send to Supervising Labor
         </button>
     </form>
-    <button onclick="window.print()" class="btn btn-outline-dark btn-sm ms-auto">
-        <i class="bi bi-printer me-1"></i>Print Report
+    <a href="<?= APP_URL ?>/reporting-officer/reports/<?= $savedReport['id'] ?>/view"
+       class="btn btn-outline-success btn-sm">
+        <i class="bi bi-eye me-1"></i>View Saved Report
+    </a>
+    <?php endif; ?>
+    <?php endif; ?>
+    <button type="button" class="btn btn-success btn-sm <?= $savedReport ? 'ms-0' : '' ?>"
+            data-bs-toggle="collapse" data-bs-target="#generateForm">
+        <i class="bi bi-file-earmark-bar-graph me-1"></i>Generate Summary Report
     </button>
+    <button onclick="window.print()" class="btn btn-outline-dark btn-sm ms-auto">
+        <i class="bi bi-printer me-1"></i>Print
+    </button>
+</div>
+
+<!-- Generate Report Form (collapsible) -->
+<div class="collapse mb-4" id="generateForm">
+    <div class="card border-success shadow-sm">
+        <div class="card-header bg-success text-white py-2">
+            <h6 class="mb-0 small fw-bold"><i class="bi bi-file-earmark-bar-graph me-2"></i>Generate Summary Report</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="<?= APP_URL ?>/reporting-officer/generate-report/<?= $fair['id'] ?>">
+                <?= csrfField() ?>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold small">Overall Assessment <span class="text-muted">(optional)</span></label>
+                        <textarea name="overall_remarks" class="form-control form-control-sm" rows="3"
+                                  placeholder="Overall assessment of the job fair outcome..."
+                        ><?= htmlspecialchars($savedReport ? ($db->fetch("SELECT overall_remarks FROM job_fair_reports WHERE id=?",[$savedReport['id']])['overall_remarks'] ?? '') : '', ENT_QUOTES) ?></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Observations</label>
+                        <textarea name="observations" class="form-control form-control-sm" rows="3"
+                                  placeholder="Key observations from the job fair..."></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Recommendations &amp; Issues</label>
+                        <textarea name="recommendations" class="form-control form-control-sm" rows="3"
+                                  placeholder="Recommendations and suggested improvements..."></textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="bi bi-bar-chart-fill me-1"></i>Generate &amp; Save Report
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm ms-2"
+                                data-bs-toggle="collapse" data-bs-target="#generateForm">Cancel</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <!-- Report Header -->
@@ -141,7 +208,7 @@
             <?php foreach ($applicants as $i => $ap):
                 $vsColors = ['approved'=>'success','pending'=>'warning','rejected'=>'danger','not_submitted'=>'secondary','resubmit'=>'info'];
                 $vsColor  = $vsColors[$ap['validation_status']] ?? 'secondary';
-                $oColors  = ['hired'=>'success','not_hired'=>'danger','for_consideration'=>'info','pending'=>'warning'];
+                $oColors  = ['qualified_for_contact'=>'success','waitlisted'=>'info','not_qualified'=>'danger','pending'=>'warning'];
                 $oColor   = $oColors[$ap['hiring_outcome'] ?? 'pending'] ?? 'secondary';
             ?>
             <tr>
