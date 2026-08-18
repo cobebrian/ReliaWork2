@@ -485,6 +485,16 @@ class ReportingOfficerController
             redirect(APP_URL . '/reporting-officer/reports');
         }
 
+        // Require submission remarks
+        $submissionRemarks = trim($_POST['submission_remarks'] ?? '');
+        if (empty($submissionRemarks)) {
+            flash('error', 'Please enter your overall remarks before submitting the report to Supervising Labor.');
+            redirect(APP_URL . '/reporting-officer/reports/' . $reportId . '/view');
+        }
+
+        $submissionObservations    = trim($_POST['submission_observations']    ?? '');
+        $submissionRecommendations = trim($_POST['submission_recommendations'] ?? '');
+
         $officerId = (int)currentUser()['id'];
 
         // Find all SL users to submit to
@@ -499,18 +509,26 @@ class ReportingOfficerController
         $pdo = $this->db->getPdo();
         $pdo->beginTransaction();
         try {
+            // Save remarks + mark submitted in one atomic update
             $this->db->execute(
                 "UPDATE job_fair_reports
-                 SET report_status = 'submitted', submitted_at = NOW(), submitted_to = ?
+                 SET report_status    = 'submitted',
+                     submitted_at     = NOW(),
+                     submitted_to     = ?,
+                     overall_remarks  = ?,
+                     observations     = COALESCE(NULLIF(?, ''), observations),
+                     recommendations  = COALESCE(NULLIF(?, ''), recommendations)
                  WHERE id = ?",
-                [$slUsers[0]['id'], $reportId]
+                [$slUsers[0]['id'], $submissionRemarks,
+                 $submissionObservations, $submissionRecommendations,
+                 $reportId]
             );
 
             $this->db->execute(
                 "INSERT INTO report_submission_history
                  (report_id, action, performed_by, remarks, performed_at)
                  VALUES (?, 'submitted', ?, ?, NOW())",
-                [$reportId, $officerId, "Report submitted to Supervising Labor."]
+                [$reportId, $officerId, $submissionRemarks]
             );
 
             $pdo->commit();
@@ -520,13 +538,16 @@ class ReportingOfficerController
             redirect(APP_URL . '/reporting-officer/job-fairs/' . $report['job_fair_request_id']);
         }
 
-        // Notify all SL users
+        // Notify all SL users — include snippet of the remarks
+        $remarksPreview = strlen($submissionRemarks) > 80
+            ? substr($submissionRemarks, 0, 80) . '...'
+            : $submissionRemarks;
         foreach ($slUsers as $sl) {
             $this->notifModel->create(
                 (int)$sl['id'],
                 'report_submitted',
                 'Job Fair Report Submitted',
-                "Reporting Officer submitted the report for \"{$report['fair_title']}\". Please review.",
+                "Reporting Officer submitted the report for \"{$report['fair_title']}\". Remarks: \"{$remarksPreview}\"",
                 APP_URL . '/supervising-labor/reports/' . $reportId
             );
         }

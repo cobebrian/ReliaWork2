@@ -26,13 +26,13 @@
         — Generated <?= date('M d, Y', strtotime($savedReport['generated_at'])) ?>
     </span>
     <?php if ($savedReport['report_status'] === 'draft'): ?>
-    <form method="POST" action="<?= APP_URL ?>/reporting-officer/reports/<?= $savedReport['id'] ?>/submit" class="d-inline">
-        <?= csrfField() ?>
-        <button type="submit" class="btn btn-primary btn-sm"
-                onclick="return confirm('Submit this report to Supervising Labor?')">
-            <i class="bi bi-send me-1"></i>Send to Supervising Labor
-        </button>
-    </form>
+    <button type="button"
+            class="btn btn-primary btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#submitFromFairModal"
+            data-reportid="<?= $savedReport['id'] ?>">
+        <i class="bi bi-send me-1"></i>Send to Supervising Labor
+    </button>
     <a href="<?= APP_URL ?>/reporting-officer/reports/<?= $savedReport['id'] ?>/view"
        class="btn btn-outline-success btn-sm">
         <i class="bi bi-eye me-1"></i>View Saved Report
@@ -261,3 +261,74 @@
 </div>
 
 <?php $content = ob_get_clean(); include VIEW_PATH . '/layouts/main.php'; ?>
+
+<!-- Submit from Job Fair Report page Modal -->
+<?php if (!empty($savedReport) && $savedReport['report_status'] === 'draft'): ?>
+<div class="modal fade" id="submitFromFairModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-send me-2"></i>Submit Report to Supervising Labor
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST"
+                  action="<?= APP_URL ?>/reporting-officer/reports/<?= $savedReport['id'] ?>/submit">
+                <?= csrfField() ?>
+                <div class="modal-body">
+                    <div class="alert alert-primary d-flex gap-3 mb-3 py-2">
+                        <i class="bi bi-file-earmark-bar-graph fs-4 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong><?= htmlspecialchars($fair['title'], ENT_QUOTES) ?></strong><br>
+                            <span class="text-muted">
+                                Once submitted, this report will be locked and visible to Supervising Labor.
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Required Remarks -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Overall Remarks <span class="text-danger">*</span>
+                        </label>
+                        <textarea name="submission_remarks"
+                                  id="fairReportRemarks"
+                                  class="form-control" rows="5"
+                                  placeholder="Enter your overall assessment of this job fair's outcomes, key observations, and recommendations before submitting to Supervising Labor..."
+                                  required
+                                  minlength="10"><?= htmlspecialchars($savedReport['overall_remarks'] ?? '', ENT_QUOTES) ?></textarea>
+                        <div class="form-text text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Required — minimum 10 characters. Permanently saved and visible to Supervising Labor.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Observations <span class="text-muted">(optional)</span></label>
+                        <textarea name="submission_observations" class="form-control form-control-sm" rows="2"
+                                  placeholder="Key observations from the job fair..."></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold small">Recommendations <span class="text-muted">(optional)</span></label>
+                        <textarea name="submission_recommendations" class="form-control form-control-sm" rows="2"
+                                  placeholder="Suggestions for future job fairs..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold px-4"
+                            id="fairSubmitBtn"
+                            <?= empty($savedReport['overall_remarks']) ? 'disabled' : '' ?>>
+                        <i class="bi bi-send me-2"></i>Submit to Supervising Labor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('fairReportRemarks')?.addEventListener('input', function() {
+    document.getElementById('fairSubmitBtn').disabled = this.value.trim().length < 10;
+});
+</script>
+<?php endif; ?>

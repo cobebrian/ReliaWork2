@@ -10,13 +10,10 @@
         <i class="bi bi-arrow-left me-1"></i>Reports List
     </a>
     <?php if ($report['report_status'] === 'draft'): ?>
-    <form method="POST" action="<?= APP_URL ?>/reporting-officer/reports/<?= $report['id'] ?>/submit" class="d-inline">
-        <?= csrfField() ?>
-        <button type="submit" class="btn btn-primary btn-sm"
-                onclick="return confirm('Submit this report to Supervising Labor?')">
-            <i class="bi bi-send me-1"></i>Send to Supervising Labor
-        </button>
-    </form>
+    <button type="button" class="btn btn-primary btn-sm"
+            data-bs-toggle="modal" data-bs-target="#submitModal">
+        <i class="bi bi-send me-1"></i>Send to Supervising Labor
+    </button>
     <?php else: ?>
     <span class="badge bg-<?= $report['report_status']==='reviewed'?'success':'primary' ?> py-2 px-3">
         <?= ucfirst($report['report_status']) ?>
@@ -197,5 +194,86 @@
         <i class="bi bi-arrow-left me-1"></i>Back to Reports
     </a>
 </div>
+
+<!-- Submit to SL Modal (required remarks) -->
+<?php if ($report['report_status'] === 'draft'): ?>
+<div class="modal fade" id="submitModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-send me-2"></i>Submit Report to Supervising Labor
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?= APP_URL ?>/reporting-officer/reports/<?= $report['id'] ?>/submit">
+                <?= csrfField() ?>
+                <div class="modal-body">
+                    <!-- Report Summary -->
+                    <div class="alert alert-primary d-flex gap-3 mb-3">
+                        <i class="bi bi-file-earmark-bar-graph fs-4 flex-shrink-0"></i>
+                        <div class="small">
+                            <strong><?= htmlspecialchars($report['fair_title'], ENT_QUOTES) ?></strong><br>
+                            Generated: <?= date('F d, Y', strtotime($report['generated_at'])) ?><br>
+                            <span class="text-muted">This report will be locked as "Submitted" after sending and cannot be regenerated without resetting.</span>
+                        </div>
+                    </div>
+
+                    <!-- Remarks — REQUIRED -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Overall Remarks <span class="text-danger">*</span>
+                        </label>
+                        <textarea name="submission_remarks"
+                                  class="form-control" rows="4"
+                                  placeholder="Enter your overall assessment of the job fair before submitting to Supervising Labor..."
+                                  required
+                                  minlength="10"><?= htmlspecialchars($report['overall_remarks'] ?? '', ENT_QUOTES) ?></textarea>
+                        <div class="form-text">
+                            Required. Minimum 10 characters. These remarks will be permanently saved and visible to Supervising Labor.
+                        </div>
+                    </div>
+
+                    <!-- Observations (optional) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Observations <span class="text-muted">(optional)</span></label>
+                        <textarea name="submission_observations"
+                                  class="form-control form-control-sm" rows="2"
+                                  placeholder="Key observations from the job fair..."><?= htmlspecialchars($report['observations'] ?? '', ENT_QUOTES) ?></textarea>
+                    </div>
+
+                    <!-- Recommendations (optional) -->
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold small">Recommendations <span class="text-muted">(optional)</span></label>
+                        <textarea name="submission_recommendations"
+                                  class="form-control form-control-sm" rows="2"
+                                  placeholder="Suggestions for future improvements..."><?= htmlspecialchars($report['recommendations'] ?? '', ENT_QUOTES) ?></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold px-4"
+                            id="submitBtn" disabled>
+                        <i class="bi bi-send me-2"></i>Submit to Supervising Labor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enable submit button only when remarks has content
+const remarksTA = document.querySelector('textarea[name="submission_remarks"]');
+const submitBtn = document.getElementById('submitBtn');
+if (remarksTA && submitBtn) {
+    remarksTA.addEventListener('input', function() {
+        submitBtn.disabled = this.value.trim().length < 10;
+    });
+    // Pre-fill check
+    if (remarksTA.value.trim().length >= 10) submitBtn.disabled = false;
+}
+</script>
+<?php endif; ?>
 
 <?php $content = ob_get_clean(); include VIEW_PATH . '/layouts/main.php'; ?>

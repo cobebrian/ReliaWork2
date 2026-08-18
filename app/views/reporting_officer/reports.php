@@ -86,13 +86,16 @@
                             <i class="bi bi-eye"></i>
                         </a>
                         <?php if ($r['report_status'] === 'draft'): ?>
-                        <form method="POST" action="<?= APP_URL ?>/reporting-officer/reports/<?= $r['id'] ?>/submit" class="d-inline">
-                            <?= csrfField() ?>
-                            <button type="submit" class="btn btn-sm btn-primary" title="Submit to SL"
-                                    onclick="return confirm('Submit this report to Supervising Labor?')">
-                                <i class="bi bi-send"></i>
-                            </button>
-                        </form>
+                        <button type="button"
+                                class="btn btn-sm btn-primary"
+                                title="Submit to Supervising Labor"
+                                data-bs-toggle="modal"
+                                data-bs-target="#submitModal"
+                                data-reportid="<?= $r['id'] ?>"
+                                data-fairtitle="<?= htmlspecialchars($r['fair_title'], ENT_QUOTES) ?>"
+                                data-remarks="<?= htmlspecialchars($r['overall_remarks'] ?? '', ENT_QUOTES) ?>">
+                            <i class="bi bi-send"></i>
+                        </button>
                         <?php endif; ?>
                     </div>
                 </td>
@@ -103,5 +106,81 @@
         </table>
     </div>
 </div>
+
+<!-- Submit to SL Modal (requires remarks) -->
+<div class="modal fade" id="submitModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-send me-2"></i>Submit Report to Supervising Labor
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="" id="submitForm">
+                <?= csrfField() ?>
+                <div class="modal-body">
+                    <div class="alert alert-primary d-flex gap-3 mb-3 py-2">
+                        <i class="bi bi-file-earmark-bar-graph fs-4 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong id="modalFairTitle"></strong><br>
+                            <span class="text-muted">Once submitted, this report will be locked and visible to Supervising Labor.</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Overall Remarks <span class="text-danger">*</span>
+                        </label>
+                        <textarea name="submission_remarks"
+                                  id="modalRemarks"
+                                  class="form-control" rows="5"
+                                  placeholder="Enter your overall assessment of the job fair outcomes, key observations, and recommendations before submitting to Supervising Labor..."
+                                  required minlength="10"></textarea>
+                        <div class="form-text text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Required — minimum 10 characters. These remarks will be permanently saved and visible to Supervising Labor alongside the report.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Observations <span class="text-muted">(optional)</span></label>
+                        <textarea name="submission_observations" class="form-control form-control-sm" rows="2"
+                                  placeholder="Key observations from the job fair..."></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold small">Recommendations <span class="text-muted">(optional)</span></label>
+                        <textarea name="submission_recommendations" class="form-control form-control-sm" rows="2"
+                                  placeholder="Suggestions for future improvements..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary fw-semibold px-4" id="modalSubmitBtn" disabled>
+                        <i class="bi bi-send me-2"></i>Submit to Supervising Labor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const submitModal = document.getElementById('submitModal');
+if (submitModal) {
+    submitModal.addEventListener('show.bs.modal', function(e) {
+        const btn = e.relatedTarget;
+        document.getElementById('submitForm').action =
+            '<?= APP_URL ?>/reporting-officer/reports/' + btn.dataset.reportid + '/submit';
+        document.getElementById('modalFairTitle').textContent = btn.dataset.fairtitle;
+        const ta = document.getElementById('modalRemarks');
+        ta.value = btn.dataset.remarks || '';
+        document.getElementById('modalSubmitBtn').disabled = ta.value.trim().length < 10;
+    });
+
+    document.getElementById('modalRemarks')?.addEventListener('input', function() {
+        document.getElementById('modalSubmitBtn').disabled = this.value.trim().length < 10;
+    });
+}
+</script>
 
 <?php $content = ob_get_clean(); include VIEW_PATH . '/layouts/main.php'; ?>
