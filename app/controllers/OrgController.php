@@ -363,22 +363,22 @@ class OrgController
 
         // Notify the applicant
         $msgs = [
-            'approved'       => "Your organization application for \"{$application['org_name']}\" has been APPROVED! You are now the Organization Admin.",
-            'rejected'       => "Your organization application for \"{$application['org_name']}\" was rejected." . ($notes ? " Reason: {$notes}" : ''),
+            'approve'        => "Your organization application for \"{$application['org_name']}\" has been APPROVED! You are now the Organization Admin.",
+            'reject'         => "Your organization application for \"{$application['org_name']}\" was rejected." . ($notes ? " Reason: {$notes}" : ''),
             'needs_revision' => "Your organization application needs revision." . ($notes ? " Notes: {$notes}" : ''),
             'under_review'   => "Your organization application is now under review.",
         ];
         $titles = [
-            'approved'       => 'Organization Application Approved ✓',
-            'rejected'       => 'Organization Application Rejected',
+            'approve'        => 'Organization Application Approved ✓',
+            'reject'         => 'Organization Application Rejected',
             'needs_revision' => 'Revision Required for Your Application',
             'under_review'   => 'Application Under Review',
         ];
         $this->notifModel->create(
             (int)$application['uid'],
             'org_decision',
-            $titles[$action],
-            $msgs[$action],
+            $titles[$action] ?? 'Application Update',
+            $msgs[$action]   ?? 'Your organization application has been updated.',
             APP_URL . '/org/dashboard'
         );
 
