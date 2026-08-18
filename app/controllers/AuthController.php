@@ -93,6 +93,20 @@ class AuthController
 
         auditLog('login', 'auth', "User {$user['email']} logged in.");
 
+        // If this normal_user has pending org invitations, send them there first
+        if ($user['role'] === 'normal_user') {
+            $db = Database::getInstance();
+            $pendingInvites = (int)$db->fetchColumn(
+                "SELECT COUNT(*) FROM organization_memberships
+                 WHERE user_id = ? AND status = 'invited'",
+                [(int)$user['id']]
+            );
+            if ($pendingInvites > 0) {
+                flash('info', "You have {$pendingInvites} pending organization invitation(s). Please review and respond.");
+                redirect(APP_URL . '/org/invitation');
+            }
+        }
+
         redirect(roleDashboardUrl($user['role']));
     }
 

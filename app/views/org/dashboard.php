@@ -6,7 +6,41 @@
     <small class="text-muted">Normal User — You can apply to join a Barangay Organization below.</small>
 </div>
 
-<?php if (!empty($notifications)): ?>
+<?php
+// Check for pending invitations
+$db = Database::getInstance();
+$pendingInvitations = $db->fetchAll(
+    "SELECT om.id, o.name AS org_name, o.barangay, r.label AS role_label
+     FROM organization_memberships om
+     JOIN organizations o ON o.id = om.organization_id
+     JOIN org_roles r ON r.id = om.org_role_id
+     WHERE om.user_id = ? AND om.status = 'invited'",
+    [(int)currentUser()['id']]
+);
+?>
+
+<?php if (!empty($pendingInvitations)): ?>
+<div class="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-start gap-3">
+    <i class="bi bi-envelope-fill text-warning fs-4 flex-shrink-0 mt-1"></i>
+    <div class="flex-grow-1">
+        <strong>You have <?= count($pendingInvitations) ?> pending organization invitation(s)!</strong>
+        <ul class="mb-2 mt-1 small">
+            <?php foreach ($pendingInvitations as $inv): ?>
+            <li>
+                <strong><?= htmlspecialchars($inv['org_name'], ENT_QUOTES) ?></strong>
+                (Barangay <?= htmlspecialchars($inv['barangay'], ENT_QUOTES) ?>) —
+                Role: <span class="badge bg-primary"><?= htmlspecialchars($inv['role_label'], ENT_QUOTES) ?></span>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <a href="<?= APP_URL ?>/org/invitation" class="btn btn-warning btn-sm fw-semibold">
+            <i class="bi bi-envelope-open me-1"></i>Review &amp; Respond to Invitations
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($notifications) && empty($pendingInvitations)): ?>
 <div class="alert alert-info d-flex gap-2 mb-4">
     <i class="bi bi-bell-fill flex-shrink-0 mt-1"></i>
     <div class="small">You have <strong><?= count($notifications) ?></strong> unread notification(s).
