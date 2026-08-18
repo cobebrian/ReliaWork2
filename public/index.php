@@ -52,6 +52,7 @@ require_once APP_PATH . '/controllers/ValidatingOfficerController.php';
 require_once APP_PATH . '/controllers/InterviewController.php';
 require_once APP_PATH . '/controllers/ReportingOfficerController.php';
 require_once APP_PATH . '/controllers/HiringController.php';
+require_once APP_PATH . '/controllers/OrgController.php';
 
 // ── Session ───────────────────────────────────────────────────────────────────
 ini_set('session.cookie_httponly', '1');
@@ -250,6 +251,23 @@ $routes = [
     ['POST', '/techvoc/class/{id}/delete-student',  'TechVocController',          'deleteStudent'],
     ['GET',  '/techvoc/class/{id}/attendance',      'TechVocController',          'attendance'],
     ['POST', '/techvoc/class/{id}/attendance/save', 'TechVocController',          'saveAttendance'],
+
+    // ── Normal User / Organization RBAC ──────────────────────────────────────
+    ['GET',  '/org/dashboard',                      'OrgController', 'dashboard'],
+    ['GET',  '/org/apply',                          'OrgController', 'showApply'],
+    ['POST', '/org/apply',                          'OrgController', 'storeApply'],
+    ['GET',  '/org/application/{id}/status',        'OrgController', 'applicationStatus'],
+    ['GET',  '/org/manage',                         'OrgController', 'manage'],
+    ['POST', '/org/manage/invite',                  'OrgController', 'invite'],
+    ['POST', '/org/manage/update-role',             'OrgController', 'updateMemberRole'],
+    ['POST', '/org/manage/remove',                  'OrgController', 'removeMember'],
+    ['GET',  '/org/invitation',                     'OrgController', 'invitation'],
+    ['POST', '/org/invitation/{id}/respond',        'OrgController', 'respondInvitation'],
+
+    // ── Admin: Organization Applications ─────────────────────────────────────
+    ['GET',  '/admin/org-applications',             'OrgController', 'adminApplications'],
+    ['GET',  '/admin/org-applications/{id}/review', 'OrgController', 'adminReview'],
+    ['POST', '/admin/org-applications/{id}/decide', 'OrgController', 'adminDecide'],
 
     // ── Notifications ─────────────────────────────────────────────────────────
     ['POST', '/notifications/{id}/read',            'NotificationController',     'markRead'],

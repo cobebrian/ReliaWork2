@@ -19,8 +19,9 @@ $navLinks = [];
 switch ($role) {
     case 'admin':
         $navLinks = [
-            ['url' => APP_URL . '/admin/dashboard', 'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
-            ['url' => APP_URL . '/admin/users',     'icon' => 'bi-people-fill',  'label' => 'User Management'],
+            ['url' => APP_URL . '/admin/dashboard',          'icon' => 'bi-speedometer2', 'label' => 'Dashboard'],
+            ['url' => APP_URL . '/admin/users',              'icon' => 'bi-people-fill',  'label' => 'User Management'],
+            ['url' => APP_URL . '/admin/org-applications',   'icon' => 'bi-building',     'label' => 'Org Applications'],
         ];
         break;
     case 'supervising_labor':
@@ -92,7 +93,24 @@ switch ($role) {
             ['url' => APP_URL . '/techvoc/class/2/attendance',       'icon' => 'bi-clipboard-check', 'label' => 'Electrical Attendance'],
         ];
         break;
-    case 'bedo':
+    case 'normal_user':
+        $navLinks = [
+            ['url' => APP_URL . '/org/dashboard',    'icon' => 'bi-speedometer2',      'label' => 'Dashboard'],
+            ['url' => APP_URL . '/org/apply',        'icon' => 'bi-building-add',       'label' => 'Apply for Organization'],
+            ['url' => APP_URL . '/org/invitation',   'icon' => 'bi-envelope',           'label' => 'Invitations'],
+        ];
+        // If the user is an org admin, show manage link
+        $db = Database::getInstance();
+        $isOrgAdmin = $db->fetchColumn(
+            "SELECT COUNT(*) FROM organization_memberships om
+             JOIN org_roles r ON r.id = om.org_role_id
+             WHERE om.user_id = ? AND r.name = 'organization_admin' AND om.status = 'active'",
+            [$user['id'] ?? 0]
+        );
+        if ($isOrgAdmin) {
+            $navLinks[] = ['url' => APP_URL . '/org/manage', 'icon' => 'bi-gear-fill', 'label' => 'Manage Organization'];
+        }
+        break;
         $navLinks = [
             ['url' => APP_URL . '/bedo/dashboard',    'icon' => 'bi-speedometer2',      'label' => 'Dashboard'],
             ['url' => APP_URL . '/bedo/compose',      'icon' => 'bi-megaphone-fill',     'label' => 'Post Job Fair Ad'],

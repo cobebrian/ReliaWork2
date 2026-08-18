@@ -163,13 +163,20 @@ class AuthController
             'middlename' => $middlename ?: null,
             'email'      => $email,
             'password'   => hashPassword($password),
-            'role'       => null,
-            'status'     => 'pending',
+            'role'       => 'normal_user',   // All new registrations start as Normal User
+            'status'     => 'approved',       // Normal users are approved immediately — they apply for org roles separately
         ]);
 
         auditLog('register', 'auth', "New registration: {$email} ({$lastname}, {$firstname})");
-        flash('success', 'Registration submitted successfully. Your account is awaiting admin approval.');
-        redirect(APP_URL . '/login');
+        flash('success', 'Account created successfully! You are now logged in as a Normal User.');
+
+        // Auto-login the new user
+        $newUser = $this->userModel->findByEmail($email);
+        if ($newUser) {
+            $_SESSION['user_id'] = $newUser['id'];
+            $_SESSION['user']    = $newUser;
+        }
+        redirect(APP_URL . '/org/dashboard');
     }
 
     // GET /logout

@@ -58,6 +58,7 @@ define('ROLES', [
     'bedo',
     'validating_officer',
     'reporting_officer',
+    'normal_user',
 ]);
 
 // ── Role Labels ───────────────────────────────────────────────────────────────
@@ -72,4 +73,14 @@ define('ROLE_LABELS', [
     'bedo'                => 'BEDO Officer',
     'validating_officer'  => 'Validating Officer',
     'reporting_officer'   => 'Reporting Officer',
+    'normal_user'         => 'Normal User',
+]);
+
+// ── Org Role Labels ───────────────────────────────────────────────────────────
+define('ORG_ROLE_LABELS', [
+    'organization_admin' => 'Organization Admin (Secretary)',
+    'punong_barangay'    => 'Punong Barangay',
+    'bedo_officer'       => 'BEDO Officer',
+    'agency'             => 'Agency',
+    'member'             => 'Member',
 ]);
